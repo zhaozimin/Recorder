@@ -15,7 +15,9 @@ SUPPORTED = ("zh", "en", "ja")
 LANG_ORDER = ("", "zh", "en", "ja")   # 菜单顺序，""=跟随系统
 LANG_NAMES = {"zh": "简体中文", "en": "English", "ja": "日本語"}
 
-_cur = "zh"
+_cur = "zh"        # 界面语言(UI)
+_primary = ""      # 主语言=转写语言(""=跟随系统)
+_secondary = ""    # 辅语言=日常夹杂语言(""=无)，仅用于强化识别提示
 
 
 # ---------------- 系统语言探测 ----------------
@@ -43,18 +45,41 @@ def resolve(code: str) -> str:
 
 
 def set_language(code: str) -> str:
+    """设界面语言(UI)。"""
     global _cur
     _cur = resolve(code)
     return _cur
+
+
+def set_primary(code: str) -> None:
+    """设主语言(=转写语言)，存原值(""=跟随系统)。"""
+    global _primary
+    _primary = code if code in SUPPORTED else ""
+
+
+def set_secondary(code: str) -> None:
+    """设辅语言(日常夹杂语言)，存原值(""=无)。"""
+    global _secondary
+    _secondary = code if code in SUPPORTED else ""
 
 
 def current() -> str:
     return _cur
 
 
+def primary() -> str:
+    """解析后的主语言(转写语言)：受支持→原样；""→跟随系统。"""
+    return resolve(_primary)
+
+
+def secondary() -> str:
+    """辅语言原值(""=无)。"""
+    return _secondary
+
+
 def whisper_lang() -> str:
-    """转写语言 = 当前 UI 语言(zh/en/ja 均为合法 whisper 语言码)。"""
-    return _cur
+    """转写语言 = 主语言(与界面语言无关；zh/en/ja 均为合法 whisper 语言码)。"""
+    return resolve(_primary)
 
 
 def lang_display(code: str) -> str:
@@ -75,7 +100,12 @@ def enroll_script() -> str:
 
 
 def prompt() -> str:
-    return PROMPT.get(_cur, PROMPT["en"])
+    """whisper 基础提示：主语言的提示 + (有辅语言则)夹杂提示。"""
+    p = resolve(_primary)
+    base = PROMPT.get(p, PROMPT["en"])
+    if _secondary in SUPPORTED and _secondary != p:
+        base += PROMPT_MIX.get(p, "").format(sec=LANG_NAMES.get(_secondary, _secondary))
+    return base
 
 
 # ============================================================================
@@ -88,7 +118,8 @@ STRINGS = {
         "mark_done": "已注册", "mark_todo": "未注册",
         "enroll_item": "注册我的声音（{mark}）", "enroll_running": "● 正在注册…请持续说话",
         "spk_gate": "声纹门：{state}", "on": "开", "off": "关", "spk_score": "｜上句相似度 {s}",
-        "tz": "时区：{tz}", "follow_system": "跟随系统", "lang_menu": "语言：{name}",
+        "tz": "时区：{tz}", "follow_system": "跟随系统", "none": "无",
+        "lang_menu": "界面语言：{name}", "primary_menu": "主语言：{name}", "secondary_menu": "辅语言：{name}",
         "vault": "保存位置 …/{p}（点此更改）",
         "keywords": "关键词管理…", "open_note": "打开今天的笔记", "quit": "退出",
         "start": "开始", "cancel": "取消", "save": "保存", "close": "关闭",
@@ -117,7 +148,8 @@ STRINGS = {
         "mark_done": "registered", "mark_todo": "not set",
         "enroll_item": "Register my voice ({mark})", "enroll_running": "● Registering… keep speaking",
         "spk_gate": "Voiceprint gate: {state}", "on": "On", "off": "Off", "spk_score": " · last match {s}",
-        "tz": "Timezone: {tz}", "follow_system": "Follow system", "lang_menu": "Language: {name}",
+        "tz": "Timezone: {tz}", "follow_system": "Follow system", "none": "None",
+        "lang_menu": "Interface: {name}", "primary_menu": "Primary language: {name}", "secondary_menu": "Secondary language: {name}",
         "vault": "Save to …/{p} (click to change)",
         "keywords": "Keywords…", "open_note": "Open today's note", "quit": "Quit",
         "start": "Start", "cancel": "Cancel", "save": "Save", "close": "Close",
@@ -147,7 +179,8 @@ STRINGS = {
         "mark_done": "登録済み", "mark_todo": "未登録",
         "enroll_item": "声紋を登録（{mark}）", "enroll_running": "● 登録中…話し続けてください",
         "spk_gate": "声紋ゲート：{state}", "on": "オン", "off": "オフ", "spk_score": "・類似度 {s}",
-        "tz": "タイムゾーン：{tz}", "follow_system": "システムに従う", "lang_menu": "言語：{name}",
+        "tz": "タイムゾーン：{tz}", "follow_system": "システムに従う", "none": "なし",
+        "lang_menu": "表示言語：{name}", "primary_menu": "主言語：{name}", "secondary_menu": "副言語：{name}",
         "vault": "保存先 …/{p}（クリックで変更）",
         "keywords": "キーワード管理…", "open_note": "今日のノートを開く", "quit": "終了",
         "start": "開始", "cancel": "キャンセル", "save": "保存", "close": "閉じる",
@@ -240,4 +273,11 @@ PROMPT = {
     "zh": "以下是简体中文普通话的日常口语记录。",
     "en": "The following is a casual everyday spoken log in English.",
     "ja": "以下は日本語の日常的な話し言葉の記録です。",
+}
+
+# 辅语言夹杂提示(按主语言措辞，{sec}=辅语言名)
+PROMPT_MIX = {
+    "zh": "其中可能夹杂{sec}。",
+    "en": " It may contain some {sec}.",
+    "ja": "{sec}が混じることがあります。",
 }

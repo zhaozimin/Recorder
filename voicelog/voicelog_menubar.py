@@ -43,7 +43,7 @@ import i18n
 BASE = Path(__file__).resolve().parent
 CFG = yaml.safe_load((BASE / "config.yaml").read_text(encoding="utf-8")) or {}
 
-VERSION = "0.7.1"
+VERSION = "0.7.2"
 
 ICON_PATH = Path(__file__).resolve().parent / "assets" / "menubar.png"  # 菜单栏模板图(原 logo 抠图)
 
@@ -81,7 +81,9 @@ ENROLL_VOICE_FLOOR = float(CFG.get("enroll_voice_floor_dbfs", -40.0))  # 高于�
 ENROLL_QUALITY_OK = float(CFG.get("enroll_quality_ok", 0.60))   # 提取质量低于此提示重采
 
 # 注册朗读稿/须知 + 全部 UI 文案现由 i18n 按当前语言提供(见 i18n.py)；config 可用 enroll_script/enroll_intro 覆盖。
-UI_LANGUAGE = i18n.set_language(CFG.get("ui_language") or "")  # ""=跟随系统；决定 UI 语言与转写语言
+i18n.set_language(CFG.get("ui_language") or "")        # 界面语言(UI)；""=跟随系统
+i18n.set_primary(CFG.get("primary_language") or "")    # 主语言=转写语言；""=跟随系统
+i18n.set_secondary(CFG.get("secondary_language") or "")  # 辅语言=日常夹杂语言；""=无
 
 
 def log_dir() -> Path:
@@ -290,7 +292,7 @@ def apply_replace(text: str) -> str:
 def current_prompt():
     """实际喂给 whisper 的 initial_prompt = 当前语言的基础提示 + 识别词库(TERMS)。
     zh 优先用 config 的 initial_prompt(含用户惯用术语)；其他语言用 i18n 默认提示。词库从源头偏置，零误伤。"""
-    base = INITIAL_PROMPT if (i18n.current() == "zh" and INITIAL_PROMPT) else i18n.prompt()
+    base = INITIAL_PROMPT if (i18n.primary() == "zh" and INITIAL_PROMPT) else i18n.prompt()
     if TERMS:
         base = (base + i18n.t("prompt_terms", terms="、".join(TERMS))).strip()
     return base or None
@@ -549,11 +551,22 @@ class VoiceLogApp(rumps.App):
         self._enroll_timer = None
         self._enroll_close_in = 0
         self._cur_tz = CFG.get("timezone") or ""
-        self._cur_lang = CFG.get("ui_language") or ""
+        self._cur_lang = CFG.get("ui_language") or ""        # 界面语言
+        self._cur_primary = CFG.get("primary_language") or ""    # 主语言=转写语言
+        self._cur_secondary = CFG.get("secondary_language") or ""  # 辅语言
 
         self.count_item = rumps.MenuItem(i18n.t("count", n=0))  # 存引用，标题会变
         self.toggle_item = rumps.MenuItem(i18n.t("pause"), callback=self.toggle)
-        self.lang_menu = self._build_lang_menu()            # 「语言」子菜单，随时切换(同时切转写语言)
+        codes = list(i18n.LANG_ORDER)                        # ["", zh, en, ja]
+        self.ui_lang_menu, self._ui_lang_items = self._lang_menu(
+            i18n.t("lang_menu", name=self._disp(self._cur_lang)),
+            self._cur_lang, codes, i18n.t("follow_system"), self.pick_lang)
+        self.primary_menu, self._primary_items = self._lang_menu(
+            i18n.t("primary_menu", name=self._disp(self._cur_primary)),
+            self._cur_primary, codes, i18n.t("follow_system"), self.pick_primary)
+        self.secondary_menu, self._secondary_items = self._lang_menu(
+            i18n.t("secondary_menu", name=self._disp_sec(self._cur_secondary)),
+            self._cur_secondary, codes, i18n.t("none"), self.pick_secondary)
         self.tz_menu = self._build_tz_menu()                # 「时区」子菜单
         self.vault_item = rumps.MenuItem(self._vault_title(), callback=self.pick_vault)
         self.enroll_item = rumps.MenuItem(self._enroll_title(), callback=self.do_enroll)
@@ -568,7 +581,9 @@ class VoiceLogApp(rumps.App):
             self.enroll_item,
             self.spk_item,
             None,  # 分隔线
-            self.lang_menu,
+            self.ui_lang_menu,
+            self.primary_menu,
+            self.secondary_menu,
             self.tz_menu,
             self.vault_item,
             self.kw_item,
@@ -740,32 +755,60 @@ class VoiceLogApp(rumps.App):
             it.state = 1 if z == tz else 0
         self.tz_menu.title = self._tz_title(tz)
 
-    # ---------------- 语言（同时切 UI 与转写语言） ----------------
-    def _build_lang_menu(self):
-        cur = CFG.get("ui_language") or ""
-        menu = rumps.MenuItem(i18n.t("lang_menu",
-                              name=i18n.lang_display(cur) if cur else i18n.t("follow_system")))
-        self._lang_items = {}
-        for code in i18n.LANG_ORDER:
-            label = i18n.t("follow_system") if code == "" else i18n.lang_display(code)
-            item = rumps.MenuItem(label, callback=self.pick_lang)
-            item.state = 1 if code == cur else 0
-            menu.add(item)
-            self._lang_items[code] = item
-        return menu
+    # ---------------- 语言：界面语言 / 主语言(转写) / 辅语言(夹杂) 三者独立 ----------------
+    @staticmethod
+    def _disp(code):
+        return i18n.lang_display(code) if code else i18n.t("follow_system")
 
-    def pick_lang(self, sender):
-        code = next((c for c, it in self._lang_items.items() if it is sender), "")
-        i18n.set_language(code)          # 立即生效：之后 t()/转写语言都用新语言
+    @staticmethod
+    def _disp_sec(code):
+        return i18n.lang_display(code) if code else i18n.t("none")
+
+    def _lang_menu(self, title, cur, codes, none_label, cb):
+        menu = rumps.MenuItem(title)
+        items = {}
+        for code in codes:
+            label = none_label if code == "" else i18n.lang_display(code)
+            it = rumps.MenuItem(label, callback=cb)
+            it.state = 1 if code == cur else 0
+            menu.add(it)
+            items[code] = it
+        return menu, items
+
+    @staticmethod
+    def _check(items, code):
+        for c, it in items.items():
+            it.state = 1 if c == code else 0
+
+    def pick_lang(self, sender):           # 界面语言
+        code = next((c for c, it in self._ui_lang_items.items() if it is sender), "")
+        i18n.set_language(code)
         self._cur_lang = code
         CFG["ui_language"] = code
         set_config_str("ui_language", code)
-        for c, it in self._lang_items.items():
-            it.state = 1 if c == code else 0
+        self._check(self._ui_lang_items, code)
         self._apply_language()
 
+    def pick_primary(self, sender):        # 主语言=转写语言(下一句即生效)
+        code = next((c for c, it in self._primary_items.items() if it is sender), "")
+        i18n.set_primary(code)
+        self._cur_primary = code
+        CFG["primary_language"] = code
+        set_config_str("primary_language", code)
+        self._check(self._primary_items, code)
+        self.primary_menu.title = i18n.t("primary_menu", name=self._disp(code))
+
+    def pick_secondary(self, sender):      # 辅语言=日常夹杂语言
+        code = next((c for c, it in self._secondary_items.items() if it is sender), "")
+        i18n.set_secondary(code)
+        self._cur_secondary = code
+        CFG["secondary_language"] = code
+        set_config_str("secondary_language", code)
+        self._check(self._secondary_items, code)
+        self.secondary_menu.title = i18n.t("secondary_menu", name=self._disp_sec(code))
+
     def _apply_language(self):
-        """切语言后重刷所有菜单标题(已打开的窗口下次开启时即为新语言)。"""
+        """切界面语言后重刷所有菜单标题(已打开的窗口下次开启时即为新语言)。"""
         self.toggle_item.title = i18n.t("resume") if self.rec.muted else i18n.t("pause")
         self.vault_item.title = self._vault_title()
         self.kw_item.title = i18n.t("keywords")
@@ -774,10 +817,15 @@ class VoiceLogApp(rumps.App):
         self.tz_menu.title = self._tz_title(self._cur_tz)
         if getattr(self, "_tz_follow", None):
             self._tz_follow.title = i18n.t("follow_system")
-        self.lang_menu.title = i18n.t("lang_menu",
-                               name=i18n.lang_display(self._cur_lang) if self._cur_lang else i18n.t("follow_system"))
-        if self._lang_items.get(""):
-            self._lang_items[""].title = i18n.t("follow_system")
+        self.ui_lang_menu.title = i18n.t("lang_menu", name=self._disp(self._cur_lang))
+        self.primary_menu.title = i18n.t("primary_menu", name=self._disp(self._cur_primary))
+        self.secondary_menu.title = i18n.t("secondary_menu", name=self._disp_sec(self._cur_secondary))
+        if self._ui_lang_items.get(""):
+            self._ui_lang_items[""].title = i18n.t("follow_system")
+        if self._primary_items.get(""):
+            self._primary_items[""].title = i18n.t("follow_system")
+        if self._secondary_items.get(""):
+            self._secondary_items[""].title = i18n.t("none")
         self.tick(None)                 # 刷新 count/enroll/spk
 
     @rumps.timer(2)
