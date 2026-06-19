@@ -21,7 +21,6 @@ import re
 import sys
 import zlib
 import queue
-import tempfile
 import threading
 import datetime
 import subprocess
@@ -43,7 +42,7 @@ from speaker import SpeakerGate
 BASE = Path(__file__).resolve().parent
 CFG = yaml.safe_load((BASE / "config.yaml").read_text(encoding="utf-8")) or {}
 
-VERSION = "0.5.2"
+VERSION = "0.6.0"
 
 SR = 16000
 BLOCK = 512  # Silero v5 在 16k 采样率下要求每块正好 512 个采样
@@ -71,7 +70,8 @@ MIN_RMS_DBFS = float(CFG.get("min_rms_dbfs", -45.0))  # 需按你的麦增益校
 SPEAKER_GATE = bool(CFG.get("speaker_gate", False))
 SPEAKER_THRESHOLD = float(CFG.get("speaker_threshold", 0.35))  # 偏放行；按菜单显示的「上句相似度」校准
 SPEAKER_PROFILE = CFG.get("speaker_profile", "~/voicelog-models/speaker_profile.npy")
-ENROLL_SCRIPT = CFG.get("enroll_script") or None  # 自定义朗读稿；留空用内置中英混合稿
+ENROLL_SCRIPT = CFG.get("enroll_script") or None  # 自定义朗读稿；留空用内置日常口语
+ENROLL_INTRO = CFG.get("enroll_intro") or None    # 自定义注册须知/广告词；留空用内置文案
 # 质量驱动注册：不再按固定秒数"盲采"(用户发呆就采到一堆静音)，改为累计「有效语音」秒数，采够才停。
 ENROLL_VOICED_SEC = float(CFG.get("enroll_voiced_sec", 20))     # 目标:采够这么多秒有效语音=完成
 ENROLL_MAX_SEC = float(CFG.get("enroll_max_sec", 120))          # 硬上限:一直没声音时兜底，防止无限等
@@ -88,6 +88,17 @@ DEFAULT_ENROLL_SCRIPT = """你好，我现在在录我自己的声音。
 说话不用快，就像平时跟人聊天一样放松。
 朋友约我周末一起去爬山，我们说好早上八点出发。
 路上买杯咖啡，再带点水果和面包，边走边聊。"""
+
+# 注册「须知页」文案：弹窗第一屏，打消隐私顾虑(本地运行/不读数据) + 说明用途与做法 + 一句广告词。
+# 可在 config 的 enroll_intro 自定义。
+DEFAULT_ENROLL_INTRO = """开始前，先花十秒了解 VoiceLog 是怎么工作的：
+
+【全程本地运行】所有识别都在你这台 Mac 上完成，不联网、不上传、不读取你的任何其他数据。
+【声音即用即弃】录到的声音转成文字后立刻丢弃，绝不写入硬盘；文字日志只存在你自己的电脑里。
+【注册做什么】记住你的「音色」后，系统只把你说的话记进日志，自动过滤掉外放的视频、电视和旁人的声音。
+【接下来】点下方「开始」，屏幕会出现几句话，用平常聊天的语气念出来就好；采够音色会自动停止，约 20 秒。
+
+VoiceLog · 你的声音日记，只属于你，从不离开这台电脑。"""
 
 
 def log_dir() -> Path:
@@ -190,18 +201,6 @@ def set_config_flag(key: str, value: bool) -> None:
             cfg.write_text(new, encoding="utf-8")
     except Exception:
         append_err(f"写回 {key} 失败：" + traceback.format_exc().splitlines()[-1])
-
-
-def show_enroll_script() -> None:
-    """把朗读稿写到临时文件并用 TextEdit 弹出，注册录音的 25 秒里一直可见，当提词器用。"""
-    text = ENROLL_SCRIPT or DEFAULT_ENROLL_SCRIPT
-    try:
-        p = Path(tempfile.gettempdir()) / "VoiceLog-注册朗读稿.txt"
-        p.write_text("【声纹注册 · 朗读稿】照着念就行，念完可从头再念，直到菜单栏图标变回 🎙。\n\n" + text,
-                     encoding="utf-8")
-        subprocess.run(["open", "-e", str(p)])  # -e = 用 TextEdit 打开
-    except Exception:
-        append_err("show_enroll_script: " + traceback.format_exc().splitlines()[-1])
 
 
 def resolve_device(dev):
@@ -405,9 +404,10 @@ class Recorder(threading.Thread):
         if status:
             self.state["status"] = str(status)
         mono = indata[:, 0].copy()           # 取单声道，拷贝出回调缓冲
-        if self._enroll is not None:
-            self._enroll.append(mono)         # 注册期间：只旁路采集
-            return                            # 且不喂转写流——否则朗读稿会被记进日志
+        buf = self._enroll                   # 快照引用：worker 随时可能把它置 None，避免 None.append 竞争
+        if buf is not None:
+            buf.append(mono)                  # 注册期间：只旁路采集，不喂转写流(否则朗读稿会进日志)
+            return
         if not self.muted:
             self.q.put(mono)
 
@@ -510,6 +510,7 @@ class Recorder(threading.Thread):
 
     def cancel_enroll(self):
         self._enroll_cancel = True
+        self._enroll = None   # 立刻停旁路采集→实时转写当即恢复，不等 worker 下一拍(最多 200ms)
 
     def _transcribe(self, utt: np.ndarray):
         try:
@@ -545,6 +546,9 @@ class VoiceLogApp(rumps.App):
         self.rec = Recorder(self.state)
         self.state["enrolled"] = self.rec.speaker.enrolled
         self.rec.start()
+        self._enroll_win = None      # 注册会话三件套：窗口 / 进度定时器 / 结果展示倒数
+        self._enroll_timer = None
+        self._enroll_close_in = 0
 
         self.count_item = rumps.MenuItem("今日已记：0 条")  # 存引用，标题会变
         self.toggle_item = rumps.MenuItem("暂停录音", callback=self.toggle)
@@ -588,34 +592,55 @@ class VoiceLogApp(rumps.App):
         return f"注册我的声音（{mark}）"
 
     def do_enroll(self, _):
-        if self.state.get("enrolling"):
-            return
+        if self.state.get("enrolling") or getattr(self, "_enroll_win", None):
+            return  # 已在注册中 / 窗口已开 → 不重复弹
         if not self.rec.speaker.available():
             rumps.alert("声纹功能不可用", "未检测到 speechbrain/torch，请在 venv 里安装 speechbrain。")
             return
+        intro = ENROLL_INTRO or DEFAULT_ENROLL_INTRO
         script = ENROLL_SCRIPT or DEFAULT_ENROLL_SCRIPT
-        try:
+        try:                               # 第一阶段：弹「须知页」，不录音；点开始才进采集
             from enroll_ui import EnrollWindow
-            self._enroll_win = EnrollWindow(script, on_cancel=self.rec.cancel_enroll)
+            self._enroll_win = EnrollWindow(intro, script,
+                                            on_start=self._enroll_start,
+                                            on_cancel=self._enroll_cancel)
         except Exception:
             append_err("EnrollWindow: " + traceback.format_exc())
             self._enroll_win = None
-            show_enroll_script()       # 原生窗口失败则退化为 TextEdit 提词
+            rumps.alert("打不开注册窗口", "请查看 logs/err.log。")
+
+    def _enroll_start(self):
+        """用户点「开始」后才真正录音 + 启动进度刷新定时器。"""
+        if self._enroll_timer:           # 先停掉残留定时器，避免孤儿计时器叠加
+            self._enroll_timer.stop()
         self._enroll_close_in = 12
-        self.rec.enroll()              # 质量驱动采集
+        self.rec.enroll()
         self._enroll_timer = rumps.Timer(self._enroll_tick, 0.25)
-        self._enroll_timer.start()     # 主线程刷新窗口进度
+        self._enroll_timer.start()
+
+    def _enroll_cancel(self):
+        """用户点「取消」：停采集与定时器、清引用（窗口自身随后关闭）。"""
+        self.rec.cancel_enroll()
+        t = getattr(self, "_enroll_timer", None)
+        if t:
+            t.stop()
+        self._enroll_timer = None
+        self._enroll_win = None
 
     def _enroll_tick(self, _):
         st = self.state
         win = getattr(self, "_enroll_win", None)
+        if win is None:                # 已取消/收尾 → 停定时器
+            t = getattr(self, "_enroll_timer", None)
+            if t:
+                t.stop()
+            return
         if st.get("enrolling"):        # 采集中：刷进度
-            if win:
-                win.update(st.get("enroll_progress", 0.0), st.get("enroll_voiced", 0.0),
-                           ENROLL_VOICED_SEC, st.get("enroll_elapsed", 0))
+            win.update(st.get("enroll_progress", 0.0), st.get("enroll_voiced", 0.0),
+                       ENROLL_VOICED_SEC, st.get("enroll_elapsed", 0))
             self._enroll_close_in = 12
             return
-        if win and not getattr(win, "_finished", False):  # 刚结束：展示结果
+        if not getattr(win, "_finished", False):  # 刚结束：展示结果
             if st.get("enroll_cancelled"):
                 win.finish(False, "已取消")
             elif st.get("enroll_ok"):
@@ -625,13 +650,13 @@ class VoiceLogApp(rumps.App):
                 win.finish(True, f"✓ 采集完成 · 提取质量 {qp}{tip}")
             else:
                 win.finish(False, "采集失败，请重试")
-        self._enroll_close_in = getattr(self, "_enroll_close_in", 12) - 1
+        self._enroll_close_in -= 1
         if self._enroll_close_in <= 0:  # 结果展示 ~3s 后自动收尾
-            if win:
-                win.close()
-            self._enroll_win = None
-            if getattr(self, "_enroll_timer", None):
+            self._enroll_win = None      # 先断引用 + 停表，再关窗——确保没有 tick 能碰到关掉的窗口
+            if self._enroll_timer:
                 self._enroll_timer.stop()
+                self._enroll_timer = None
+            win.close()
 
     def _spk_title(self) -> str:
         s = self.state.get("last_score")
@@ -648,6 +673,9 @@ class VoiceLogApp(rumps.App):
 
     # ---------------- 关键词管理（纠错 + 识别词库） ----------------
     def do_replace(self, _):
+        if self.state.get("enrolling") or self._enroll_win:
+            rumps.alert("请先结束声纹注册", "注册窗口开着时不能同时编辑关键词，请先完成或取消注册。")
+            return
         try:
             from replace_ui import ReplaceWindow
             win = ReplaceWindow(corrections_to_text(REPLACE, TERMS))

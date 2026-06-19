@@ -15,12 +15,11 @@ from AppKit import (
     NSWindow, NSTextView, NSScrollView, NSButton, NSApp, NSFont,
     NSMakeRect, NSMakeSize, NSWindowStyleMaskTitled, NSBackingStoreBuffered,
     NSFloatingWindowLevel, NSBezelBorder, NSViewWidthSizable,
-    NSApplicationActivationPolicyRegular, NSApplicationActivationPolicyAccessory,
 )
 
 from ui_common import (
     BtnTarget, make_rich_label, title_font, body_font,
-    C_PRIMARY, C_SECONDARY, C_TERTIARY,
+    C_PRIMARY, C_SECONDARY, C_TERTIARY, push_regular, pop_regular,
 )
 
 _BIG = 1.0e7  # 文本容器"无限高"，配合可垂直增长的 textview
@@ -32,7 +31,7 @@ _BIG = 1.0e7  # 文本容器"无限高"，配合可垂直增长的 textview
 class ReplaceWindow:
     def __init__(self, initial_text: str):
         self._result = "cancel"
-        W, H = 600, 560
+        W, H = 600, 600
         win = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
             NSMakeRect(0, 0, W, H), NSWindowStyleMaskTitled,  # 不加 Closable：避免红叉关闭绕过 stopModal
             NSBackingStoreBuffered, False)
@@ -43,7 +42,7 @@ class ReplaceWindow:
         c = win.contentView()
 
         c.addSubview_(make_rich_label(
-            NSMakeRect(24, H - 136, W - 48, 120),
+            NSMakeRect(24, H - 152, W - 48, 132),
             [("关键词管理\n", title_font(15), C_PRIMARY()),
              ("每行一条，「保存」后立即生效。\n\n", body_font(12), C_SECONDARY()),
              ("写「错词 = 正词」", body_font(13), C_PRIMARY()),
@@ -53,10 +52,10 @@ class ReplaceWindow:
              ("例：克劳德 = Claude      或只写      Obsidian", body_font(11), C_TERTIARY())]))
 
         # 可编辑文本框(正确配置容器，编辑/换行/滚动才正常)
-        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(24, 72, W - 48, H - 220))
+        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(24, 72, W - 48, H - 244))
         scroll.setHasVerticalScroller_(True)
         scroll.setBorderType_(NSBezelBorder)
-        tv = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, W - 48, H - 220))
+        tv = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, W - 48, H - 244))
         tv.setEditable_(True)
         tv.setSelectable_(True)
         tv.setRichText_(False)
@@ -77,6 +76,7 @@ class ReplaceWindow:
         cancel = NSButton.alloc().initWithFrame_(NSMakeRect(W - 260, 20, 110, 34))
         cancel.setTitle_("取消")
         cancel.setBezelStyle_(1)
+        cancel.setKeyEquivalent_("\x1b")   # Esc = 取消
         self._t_cancel = BtnTarget.alloc().initWithCallback_(self._cancel)
         cancel.setTarget_(self._t_cancel)
         cancel.setAction_("invoke:")
@@ -92,30 +92,24 @@ class ReplaceWindow:
 
     # ---------------- 模态运行：返回 (result, text) ----------------
     def run_modal(self):
-        # 关键：菜单栏 App 默认 Accessory 策略下，窗口能显示但物理按键被送给真正的前台 App
-        # → 只能看不能打字。临时切 Regular(变成前台 App)夺回键盘，关窗后再切回 Accessory(恢复无 Dock)。
-        try:
-            NSApp.setActivationPolicy_(NSApplicationActivationPolicyRegular)
-        except Exception:
-            pass
-        NSApp.activateIgnoringOtherApps_(True)
-        self.win.makeKeyAndOrderFront_(None)
-        self.win.makeFirstResponder_(self.tv)   # 让光标进文本框，键盘直达
-        NSApp.runModalForWindow_(self.win)       # 阻塞至 stopModal
+        # 菜单栏 App 默认 Accessory 策略下，窗口能显示但键盘被送给真正前台 App→只能看不能打字。
+        # push_regular() 变前台夺回键盘；try/finally 保证无论如何都 pop 回去，不卡 Dock 图标。
+        push_regular()
         text = ""
         try:
+            self.win.makeKeyAndOrderFront_(None)
+            self.win.makeFirstResponder_(self.tv)   # 光标进文本框，键盘直达
+            NSApp.runModalForWindow_(self.win)       # 阻塞至 stopModal
             text = self.tv.string()
         except Exception:
             pass
-        try:
-            self.win.orderOut_(None)
-            self.win.close()
-        except Exception:
-            pass
-        try:
-            NSApp.setActivationPolicy_(NSApplicationActivationPolicyAccessory)  # 还原为菜单栏附件(无 Dock)
-        except Exception:
-            pass
+        finally:
+            try:
+                self.win.orderOut_(None)
+                self.win.close()
+            except Exception:
+                pass
+            pop_regular()
         return self._result, text
 
     def _save(self):

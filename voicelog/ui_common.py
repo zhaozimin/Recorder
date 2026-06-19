@@ -10,11 +10,44 @@
 """
 import objc
 from AppKit import (
-    NSTextField, NSFont, NSColor,
+    NSTextField, NSFont, NSColor, NSApp,
     NSMutableParagraphStyle, NSFontAttributeName,
     NSForegroundColorAttributeName, NSParagraphStyleAttributeName,
+    NSApplicationActivationPolicyRegular, NSApplicationActivationPolicyAccessory,
 )
 from Foundation import NSObject, NSAttributedString, NSMutableAttributedString
+
+
+# ============================================================================
+#  激活策略（前台/菜单栏）引用计数：多个窗口可能同时需要前台。
+#  菜单栏 App 默认 Accessory(无 Dock)下窗口拿不到键盘/不稳前台 → 开窗 push_regular(变前台)，
+#  关窗 pop_regular()；只有计数归零才切回 Accessory。避免两窗各自盲切互相踩、或失败路径卡住 Dock 图标。
+# ============================================================================
+_regular_depth = 0
+
+
+def push_regular():
+    global _regular_depth
+    _regular_depth += 1
+    if _regular_depth == 1:
+        try:
+            NSApp.setActivationPolicy_(NSApplicationActivationPolicyRegular)
+        except Exception:
+            pass
+    try:
+        NSApp.activateIgnoringOtherApps_(True)
+    except Exception:
+        pass
+
+
+def pop_regular():
+    global _regular_depth
+    _regular_depth = max(0, _regular_depth - 1)
+    if _regular_depth == 0:
+        try:
+            NSApp.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+        except Exception:
+            pass
 
 
 # ============================================================================

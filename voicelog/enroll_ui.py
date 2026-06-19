@@ -1,100 +1,130 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-[INPUT]: 依赖 AppKit(PyObjC) 的 NSWindow/NSTextView/NSProgressIndicator 等；依赖 ui_common 的 BtnTarget/make_label
-[OUTPUT]: 对外提供 EnrollWindow 类(update/finish/close) 与 ok_quality 阈值
-[POS]: voicelog 的「声纹注册 UI 面」——取代 TextEdit，提供统一排版的朗读稿 + 实时进度条 + 提取质量反馈。
-       纯展示层：自身不碰音频，只读 voicelog_menubar 写进 state 的进度数字并渲染；采集逻辑在 Recorder.enroll。
+[INPUT]: 依赖 AppKit(PyObjC) 的 NSWindow/NSTextView/NSProgressIndicator/NSApp 等；依赖 ui_common 的 BtnTarget/make_label/make_rich_label/字体颜色
+[OUTPUT]: 对外提供 EnrollWindow 类(两阶段：须知→开始→采集；update/finish/close)
+[POS]: voicelog 的声纹注册 UI 面(PyObjC/Cocoa)。两阶段引导：先「须知页」(本地/隐私说明 + 开始按钮，不录音)，
+       用户点「开始」后才切到「朗读页」并正式开始录音。纯展示层，采集逻辑在主文件 Recorder.enroll，进度由 rumps.Timer 喂。
 [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 
-为什么自建窗口：TextEdit 的字体/排版每台机器都不同、且无法显示进度与采集质量。我们需要一块自己拥有、
-可控、可实时刷新的面。所有 AppKit 操作必须在主线程调用（由 rumps 菜单回调 / rumps.Timer 保证）。
+为什么两阶段：弹窗即录会让用户没反应过来。先须知后开始，既给用户准备时间，又用「用户须知」打消隐私顾虑。
+菜单栏附件型 App 弹窗需临时切 Regular 策略(变前台)才能稳被看见与交互，关窗再切回 Accessory(无 Dock)。
+所有 AppKit 操作必须在主线程(rumps 菜单回调 / rumps.Timer)调用。
 """
 from AppKit import (
-    NSWindow, NSTextView, NSScrollView, NSProgressIndicator,
-    NSButton, NSApp, NSFont, NSMakeRect, NSMakeSize,
-    NSWindowStyleMaskTitled, NSBackingStoreBuffered,
+    NSWindow, NSTextView, NSScrollView, NSProgressIndicator, NSButton, NSFont,
+    NSMakeRect, NSMakeSize, NSWindowStyleMaskTitled, NSBackingStoreBuffered,
     NSFloatingWindowLevel, NSBezelBorder,
 )
 
 from ui_common import (
-    BtnTarget, make_label, make_rich_label, title_font, body_font,
-    C_PRIMARY, C_SECONDARY,
+    BtnTarget, make_label, make_rich_label, title_font, C_PRIMARY,
+    push_regular, pop_regular,
 )
 
+_BIG = 1.0e7
+
 
 # ============================================================================
-#  声纹注册窗口：朗读稿(大字、统一) + 进度条(按有效语音量) + 状态行 + 取消/关闭。
-#  全部方法防御式 try/except——注册 UI 再怎么样也不能拖垮常驻录音进程。
+#  声纹注册窗口：两阶段。intro(须知 + 开始) → capture(朗读 + 进度)。
+#  所有方法防御式 try/except——注册 UI 不能拖垮常驻录音进程。
 # ============================================================================
 class EnrollWindow:
-    def __init__(self, script: str, on_cancel=None):
-        self.on_cancel = on_cancel
+    def __init__(self, intro_text: str, script: str, on_start=None, on_cancel=None):
+        self._script = script
+        self._on_start = on_start
+        self._on_cancel = on_cancel
         self._finished = False
+        self._phase = "intro"
         W, H = 720, 600
         win = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
-            NSMakeRect(0, 0, W, H), NSWindowStyleMaskTitled, NSBackingStoreBuffered, False)
+            NSMakeRect(0, 0, W, H), NSWindowStyleMaskTitled,  # 不加 Closable：只走我们的按钮，生命周期可控
+            NSBackingStoreBuffered, False)
         win.setTitle_("声纹注册")
         win.setLevel_(NSFloatingWindowLevel)
         win.center()
         self.win = win
         c = win.contentView()
 
-        # 引导说明放在阅读区「上方」(不混进朗读框，免得用户把引导词也念出来)
-        c.addSubview_(make_rich_label(
-            NSMakeRect(24, H - 96, W - 48, 80),
-            [("声纹注册\n", title_font(15), C_PRIMARY()),
-             ("用平常说话的语气，自然地读下面的内容就好。\n", body_font(13), C_PRIMARY()),
-             ("采的是你的「音色」不是内容——读错、漏字都没关系；念完可从头再念，采够会自动停。",
-              body_font(12), C_SECONDARY())]))
+        self.header = make_rich_label(
+            NSMakeRect(24, H - 58, W - 48, 38),
+            [("声纹注册", title_font(15), C_PRIMARY())])
+        c.addSubview_(self.header)
 
-        # 朗读框：只放「要念的句子」，统一 20pt
-        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(24, 120, W - 48, 372))
+        # 文本区：须知 / 朗读稿复用同一控件，切阶段时换内容与字号
+        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(24, 116, W - 48, H - 176))
         scroll.setHasVerticalScroller_(True)
         scroll.setBorderType_(NSBezelBorder)
-        tv = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, W - 48, 372))
+        tv = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, W - 48, H - 176))
         tv.setEditable_(False)
         tv.setSelectable_(False)
-        tv.setFont_(NSFont.systemFontOfSize_(20))
-        tv.setTextContainerInset_(NSMakeSize(16, 16))
-        tv.setString_(script)
+        tv.setTextContainerInset_(NSMakeSize(18, 16))
+        tv.setFont_(NSFont.systemFontOfSize_(14))   # 须知用 14pt
+        tv.setString_(intro_text)
         scroll.setDocumentView_(tv)
+        self.tv = tv
         c.addSubview_(scroll)
 
-        # 进度条(0~1，按「有效语音」累计)
-        bar = NSProgressIndicator.alloc().initWithFrame_(NSMakeRect(20, 88, W - 40, 18))
+        # 进度条 + 状态：采集阶段才显示
+        bar = NSProgressIndicator.alloc().initWithFrame_(NSMakeRect(24, 86, W - 48, 18))
         bar.setIndeterminate_(False)
         bar.setMinValue_(0.0)
         bar.setMaxValue_(1.0)
         bar.setDoubleValue_(0.0)
+        bar.setHidden_(True)
         self.bar = bar
         c.addSubview_(bar)
 
-        self.status = make_label(NSMakeRect(20, 54, W - 280, 26), "准备中…", 14)
+        self.status = make_label(NSMakeRect(24, 54, W - 300, 24), "", 13)
+        self.status.setHidden_(True)
         c.addSubview_(self.status)
 
-        btn = NSButton.alloc().initWithFrame_(NSMakeRect(W - 140, 48, 120, 32))
-        btn.setTitle_("取消")
-        btn.setBezelStyle_(1)  # rounded
-        self._btn_target = BtnTarget.alloc().initWithCallback_(self._on_btn)
-        btn.setTarget_(self._btn_target)
-        btn.setAction_("invoke:")
-        self.btn = btn
-        c.addSubview_(btn)
+        cancel = NSButton.alloc().initWithFrame_(NSMakeRect(W - 260, 16, 110, 34))
+        cancel.setTitle_("取消")
+        cancel.setBezelStyle_(1)
+        cancel.setKeyEquivalent_("\x1b")   # Esc = 取消（永远有键盘退路）
+        self._t_cancel = BtnTarget.alloc().initWithCallback_(self._cancel)
+        cancel.setTarget_(self._t_cancel)
+        cancel.setAction_("invoke:")
+        c.addSubview_(cancel)
 
-        NSApp.activateIgnoringOtherApps_(True)
+        start = NSButton.alloc().initWithFrame_(NSMakeRect(W - 140, 16, 110, 34))
+        start.setTitle_("开始")
+        start.setBezelStyle_(1)
+        start.setKeyEquivalent_("\r")   # 回车=开始
+        self._t_start = BtnTarget.alloc().initWithCallback_(self._begin)
+        start.setTarget_(self._t_start)
+        start.setAction_("invoke:")
+        self.start_btn = start
+        c.addSubview_(start)
+
         win.makeKeyAndOrderFront_(None)
+        push_regular()   # 作为构造最后一步：前置 AppKit 调用都成功后才切前台，失败则不会卡住 Dock 图标
 
-    def _on_btn(self):
-        if self._finished:
-            self.close()
-        else:
-            if self.on_cancel:
-                self.on_cancel()
+    # ---------------- 阶段切换：须知 → 采集 ----------------
+    def _begin(self):
+        if self._phase != "intro":
+            return
+        self._phase = "capture"
+        try:
+            self.tv.setFont_(NSFont.systemFontOfSize_(20))  # 朗读用大字
+            self.tv.setString_(self._script)
+            self.start_btn.setHidden_(True)
+            self.bar.setHidden_(False)
+            self.status.setHidden_(False)
+            self.status.setStringValue_("准备中…请开始朗读")
+        except Exception:
+            pass
+        if self._on_start:
             try:
-                self.status.setStringValue_("正在取消…")
+                self._on_start()
             except Exception:
-                pass
+                self._cancel()   # 启动失败别留下没有进度、无法收尾的僵尸采集窗
+
+    def _cancel(self):
+        if self._on_cancel:
+            self._on_cancel()
+        self.close()
 
     # ---------------- 由主线程的 rumps.Timer 调用 ----------------
     def update(self, progress: float, voiced: float, target: float, elapsed: int):
@@ -110,14 +140,19 @@ class EnrollWindow:
         try:
             if ok:
                 self.bar.setDoubleValue_(1.0)
+            self.status.setHidden_(False)
             self.status.setStringValue_(msg)
-            self.btn.setTitle_("关闭")
+            self.start_btn.setHidden_(True)
         except Exception:
             pass
 
     def close(self):
+        if getattr(self, "_closed", False):
+            return                       # 幂等：取消/自动收尾可能都来关，只 pop 一次
+        self._closed = True
         try:
             self.win.orderOut_(None)
             self.win.close()
         except Exception:
             pass
+        pop_regular()                    # 计数归零才切回无 Dock 菜单栏状态
