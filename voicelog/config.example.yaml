@@ -1,0 +1,36 @@
+# ===================== VoiceLog 配置模板 =====================
+# 复制为 config.yaml 后按需修改：  cp config.example.yaml config.yaml
+
+# 文字稿写到哪里（可在菜单栏「保存位置」随时改，会自动写回这里）
+vault_path: "~/VoiceLog/声音日志"
+
+# 语音识别模型（Apple Silicon / MLX）
+# 填 HF 仓库名首次会联网下载；或填本地模型目录的绝对路径（离线、最稳）。
+# large-v3 最准；想更快用 "mlx-community/whisper-large-v3-turbo"
+model: "mlx-community/whisper-large-v3-turbo"
+
+# 识别语言：中文 "zh"；中英混说可留空自动检测
+language: "zh"
+
+# 时间戳/当天归属日的时区。留空=跟随系统本地；或 IANA 名。菜单栏「时区」可随时切换。
+timezone: ""
+timezone_choices: ["", "Asia/Shanghai", "Asia/Tokyo", "America/Los_Angeles", "America/New_York", "Europe/London"]
+
+# 麦克风输入设备：null=系统默认；编号；或名字片段（DJI Mic Mini 接收器是 "Wireless Mic Rx"）
+input_device: null
+
+# VAD / 分句
+min_silence_ms: 700      # 停顿多久算「一句结束」
+max_utterance_sec: 30    # 单句超过这个秒数强制切一刀
+
+# 术语偏置：抬高这些词的先验，修同音/中英混说误识，顺带压繁体
+initial_prompt: "以下是关于 AI、产品设计与软件开发的简体中文口语记录。常见术语：Claude、Anthropic、Obsidian、MCP。"
+
+# 外置盘掉线时回退到这里（内置盘），绝不丢字
+fallback_path: "~/voicelog-fallback"
+
+# 额外要丢弃的「幻觉套话」（whisper 在噪声上冒的字幕水印）
+drop_phrases: []
+
+# 后处理替换（识别结果 → 正确写法）。ASCII 词按词边界匹配，不误伤更大的英文词。
+replace: {}

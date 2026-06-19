@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- 模板：install.sh 会把 __PYTHON__ / __SCRIPT__ / __LOGDIR__ 替换成本机实际路径后装到 ~/Library/LaunchAgents/ -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.six.voicelog.menubar</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PYTHON__</string>
+        <string>__SCRIPT__</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>__LOGDIR__/out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__LOGDIR__/err.log</string>
+</dict>
+</plist>

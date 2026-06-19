@@ -1,0 +1,7 @@
+mlx-whisper
+silero-vad
+sounddevice
+numpy
+rumps
+pyyaml
+tzdata

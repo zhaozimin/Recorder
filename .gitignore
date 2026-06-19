@@ -1,0 +1,42 @@
+# ===== 个人配置 / 脱敏（绝不上传）=====
+# config.yaml 含个人路径，公开的是 config.example.yaml
+voicelog/config.yaml
+# 生成的 plist 含 /Users/<你> 绝对路径，由 install.sh 从 .template 生成
+launchd/com.six.voicelog.menubar.plist
+
+# ===== 你的语音日志输出（隐私数据）=====
+声音日志/
+text/
+voicelog-fallback/
+
+# ===== 运行时产物 =====
+voicelog/logs/
+*.log
+voicelog/logs_*.txt
+
+# ===== 模型与缓存（大文件，不入库）=====
+voicelog-models/
+*.npz
+*.safetensors
+*.mlpackage
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+voicelog-venv/
+
+# ===== 打包产物 =====
+build/
+dist/
+*.app
+*.dmg
+
+# ===== 内部部署笔记（含个人上下文，不公开）=====
+交给ClaudeCode-部署指令.md
+本地24h语音日志系统-部署方案.md
+
+# ===== macOS =====
+.DS_Store
