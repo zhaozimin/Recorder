@@ -21,6 +21,7 @@ import re
 import sys
 import zlib
 import queue
+import tempfile
 import threading
 import datetime
 import subprocess
@@ -42,7 +43,7 @@ from speaker import SpeakerGate
 BASE = Path(__file__).resolve().parent
 CFG = yaml.safe_load((BASE / "config.yaml").read_text(encoding="utf-8")) or {}
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 SR = 16000
 BLOCK = 512  # Silero v5 在 16k 采样率下要求每块正好 512 个采样
@@ -70,6 +71,29 @@ SPEAKER_GATE = bool(CFG.get("speaker_gate", False))
 SPEAKER_THRESHOLD = float(CFG.get("speaker_threshold", 0.35))  # 偏放行；按菜单显示的「上句相似度」校准
 SPEAKER_PROFILE = CFG.get("speaker_profile", "~/voicelog-models/speaker_profile.npy")
 ENROLL_SEC = int(CFG.get("enroll_sec", 25))  # 注册录音时长
+ENROLL_SCRIPT = CFG.get("enroll_script") or None  # 自定义朗读稿；留空用内置唐诗
+
+# 内置注册朗读稿：选小学课本级的唐诗——人人会念、零争议、音素覆盖广，比临场瞎说更稳。
+# 念全约 35~45s，给 25s 录音留足余量；念完可从头再念。
+DEFAULT_ENROLL_SCRIPT = """《静夜思》（唐·李白）
+床前明月光，疑是地上霜。
+举头望明月，低头思故乡。
+
+《春晓》（唐·孟浩然）
+春眠不觉晓，处处闻啼鸟。
+夜来风雨声，花落知多少。
+
+《登鹳雀楼》（唐·王之涣）
+白日依山尽，黄河入海流。
+欲穷千里目，更上一层楼。
+
+《悯农》（唐·李绅）
+锄禾日当午，汗滴禾下土。
+谁知盘中餐，粒粒皆辛苦。
+
+《咏鹅》（唐·骆宾王）
+鹅，鹅，鹅，曲项向天歌。
+白毛浮绿水，红掌拨清波。"""
 
 
 def log_dir() -> Path:
@@ -172,6 +196,18 @@ def set_config_flag(key: str, value: bool) -> None:
             cfg.write_text(new, encoding="utf-8")
     except Exception:
         append_err(f"写回 {key} 失败：" + traceback.format_exc().splitlines()[-1])
+
+
+def show_enroll_script() -> None:
+    """把朗读稿写到临时文件并用 TextEdit 弹出，注册录音的 25 秒里一直可见，当提词器用。"""
+    text = ENROLL_SCRIPT or DEFAULT_ENROLL_SCRIPT
+    try:
+        p = Path(tempfile.gettempdir()) / "VoiceLog-注册朗读稿.txt"
+        p.write_text("【声纹注册 · 朗读稿】照着念就行，念完可从头再念，直到菜单栏图标变回 🎙。\n\n" + text,
+                     encoding="utf-8")
+        subprocess.run(["open", "-e", str(p)])  # -e = 用 TextEdit 打开
+    except Exception:
+        append_err("show_enroll_script: " + traceback.format_exc().splitlines()[-1])
 
 
 def resolve_device(dev):
@@ -313,7 +349,8 @@ class Recorder(threading.Thread):
             self.state["status"] = str(status)
         mono = indata[:, 0].copy()           # 取单声道，拷贝出回调缓冲
         if self._enroll is not None:
-            self._enroll.append(mono)         # 注册期间旁路采集，不打扰主转写流
+            self._enroll.append(mono)         # 注册期间：只旁路采集
+            return                            # 且不喂转写流——否则朗读稿会被记进日志
         if not self.muted:
             self.q.put(mono)
 
@@ -472,9 +509,11 @@ class VoiceLogApp(rumps.App):
             rumps.alert("声纹功能不可用", "未检测到 speechbrain/torch，请在 venv 里安装 speechbrain。")
             return
         rumps.alert("声纹注册",
-                    f"点「好」后，戴着领夹麦、用平常语气连续说话约 {ENROLL_SEC} 秒（随便念点什么）。"
-                    f"完成后自动保存你的音色，再到「声纹门」开启过滤。")
-        self.rec.enroll()
+                    f"点「好」后会弹出一段朗读稿（唐诗，照着念即可）。\n"
+                    f"请戴好领夹麦、用平常语气朗读约 {ENROLL_SEC} 秒，念完可从头再念。\n"
+                    f"录音自动开始和结束：菜单栏图标变 ● 表示进行中，变回 🎙 即完成。")
+        show_enroll_script()   # 弹出朗读稿当提词器
+        self.rec.enroll()      # 后台采集 25s 并注册
 
     def _spk_title(self) -> str:
         s = self.state.get("last_score")
