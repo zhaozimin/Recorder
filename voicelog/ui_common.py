@@ -9,8 +9,12 @@
 所有 AppKit 操作必须在主线程调用(由 rumps 菜单回调 / rumps.Timer 保证)。
 """
 import objc
-from AppKit import NSTextField, NSFont
-from Foundation import NSObject
+from AppKit import (
+    NSTextField, NSFont, NSColor,
+    NSMutableParagraphStyle, NSFontAttributeName,
+    NSForegroundColorAttributeName, NSParagraphStyleAttributeName,
+)
+from Foundation import NSObject, NSAttributedString, NSMutableAttributedString
 
 
 # ============================================================================
@@ -43,4 +47,43 @@ def make_label(frame, text: str, size: float):
     lbl.setBezeled_(False)
     lbl.setDrawsBackground_(False)
     lbl.setFont_(NSFont.systemFontOfSize_(size))
+    return lbl
+
+
+# 语义字体/颜色：用「层次」代替「一坨等宽文本」，避免廉价感。
+def title_font(size=15.0):
+    return NSFont.boldSystemFontOfSize_(size)
+
+
+def body_font(size=12.5):
+    return NSFont.systemFontOfSize_(size)
+
+
+def C_PRIMARY():    return NSColor.labelColor()
+def C_SECONDARY():  return NSColor.secondaryLabelColor()
+def C_TERTIARY():   return NSColor.tertiaryLabelColor()
+
+
+def make_rich_label(frame, segments, line_spacing=5.0, para_spacing=6.0):
+    """富文本多行只读标签。segments: [(text, font, color|None), ...]，拼成带行距的层次化标题块。"""
+    s = NSMutableAttributedString.alloc().init()
+    for text, font, color in segments:
+        attrs = {NSFontAttributeName: font}
+        if color is not None:
+            attrs[NSForegroundColorAttributeName] = color
+        s.appendAttributedString_(
+            NSAttributedString.alloc().initWithString_attributes_(text, attrs))
+    ps = NSMutableParagraphStyle.alloc().init()
+    ps.setLineSpacing_(line_spacing)
+    ps.setParagraphSpacing_(para_spacing)
+    s.addAttribute_value_range_(NSParagraphStyleAttributeName, ps, (0, s.length()))
+
+    lbl = NSTextField.alloc().initWithFrame_(frame)
+    lbl.setEditable_(False)
+    lbl.setSelectable_(False)
+    lbl.setBezeled_(False)
+    lbl.setDrawsBackground_(False)
+    lbl.setUsesSingleLineMode_(False)
+    lbl.cell().setWraps_(True)
+    lbl.setAttributedStringValue_(s)
     return lbl

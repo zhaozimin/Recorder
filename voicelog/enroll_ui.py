@@ -17,7 +17,10 @@ from AppKit import (
     NSFloatingWindowLevel, NSBezelBorder,
 )
 
-from ui_common import BtnTarget, make_label
+from ui_common import (
+    BtnTarget, make_label, make_rich_label, title_font, body_font,
+    C_PRIMARY, C_SECONDARY,
+)
 
 
 # ============================================================================
@@ -31,21 +34,25 @@ class EnrollWindow:
         W, H = 720, 600
         win = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
             NSMakeRect(0, 0, W, H), NSWindowStyleMaskTitled, NSBackingStoreBuffered, False)
-        win.setTitle_("声纹注册 · 朗读以下内容")
+        win.setTitle_("声纹注册")
         win.setLevel_(NSFloatingWindowLevel)
         win.center()
         self.win = win
         c = win.contentView()
 
-        c.addSubview_(make_label(
-            NSMakeRect(20, 555, W - 40, 28),
-            "用平常聊天的语气自然地读就好——采的是你的音色不是内容，读错没关系；采够会自动停。", 13))
+        # 引导说明放在阅读区「上方」(不混进朗读框，免得用户把引导词也念出来)
+        c.addSubview_(make_rich_label(
+            NSMakeRect(24, H - 96, W - 48, 80),
+            [("声纹注册\n", title_font(15), C_PRIMARY()),
+             ("用平常说话的语气，自然地读下面的内容就好。\n", body_font(13), C_PRIMARY()),
+             ("采的是你的「音色」不是内容——读错、漏字都没关系；念完可从头再念，采够会自动停。",
+              body_font(12), C_SECONDARY())]))
 
-        # 朗读稿(只读、可滚动、统一 20pt 系统字体)
-        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(20, 120, W - 40, 420))
+        # 朗读框：只放「要念的句子」，统一 20pt
+        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(24, 120, W - 48, 372))
         scroll.setHasVerticalScroller_(True)
         scroll.setBorderType_(NSBezelBorder)
-        tv = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, W - 40, 420))
+        tv = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, W - 48, 372))
         tv.setEditable_(False)
         tv.setSelectable_(False)
         tv.setFont_(NSFont.systemFontOfSize_(20))

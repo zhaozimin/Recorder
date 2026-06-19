@@ -18,7 +18,10 @@ from AppKit import (
     NSApplicationActivationPolicyRegular, NSApplicationActivationPolicyAccessory,
 )
 
-from ui_common import BtnTarget, make_label
+from ui_common import (
+    BtnTarget, make_rich_label, title_font, body_font,
+    C_PRIMARY, C_SECONDARY, C_TERTIARY,
+)
 
 _BIG = 1.0e7  # 文本容器"无限高"，配合可垂直增长的 textview
 
@@ -39,18 +42,21 @@ class ReplaceWindow:
         self.win = win
         c = win.contentView()
 
-        c.addSubview_(make_label(
-            NSMakeRect(20, H - 116, W - 40, 96),
-            "每行一条，保存即时生效：\n"
-            "  错词 = 正词   →  精确纠错：转写出现「错词」就替换成「正词」\n"
-            "  目标词         →  识别词库：让 Whisper 更可能直接听对它（从源头减少错认）\n"
-            "例：  克劳德 = Claude       或只写       Obsidian", 13))
+        c.addSubview_(make_rich_label(
+            NSMakeRect(24, H - 136, W - 48, 120),
+            [("关键词管理\n", title_font(15), C_PRIMARY()),
+             ("每行一条，「保存」后立即生效。\n\n", body_font(12), C_SECONDARY()),
+             ("写「错词 = 正词」", body_font(13), C_PRIMARY()),
+             ("    精确纠错：转写出现错词，就替换成正词\n", body_font(12), C_SECONDARY()),
+             ("只写「目标词」", body_font(13), C_PRIMARY()),
+             ("       识别词库：让 Whisper 更可能直接听对它\n", body_font(12), C_SECONDARY()),
+             ("例：克劳德 = Claude      或只写      Obsidian", body_font(11), C_TERTIARY())]))
 
         # 可编辑文本框(正确配置容器，编辑/换行/滚动才正常)
-        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(20, 70, W - 40, H - 200))
+        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(24, 72, W - 48, H - 220))
         scroll.setHasVerticalScroller_(True)
         scroll.setBorderType_(NSBezelBorder)
-        tv = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, W - 40, H - 200))
+        tv = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, W - 48, H - 220))
         tv.setEditable_(True)
         tv.setSelectable_(True)
         tv.setRichText_(False)
@@ -61,7 +67,7 @@ class ReplaceWindow:
         tv.setVerticallyResizable_(True)
         tv.setHorizontallyResizable_(False)
         tv.setAutoresizingMask_(NSViewWidthSizable)
-        tv.textContainer().setContainerSize_(NSMakeSize(W - 40, _BIG))
+        tv.textContainer().setContainerSize_(NSMakeSize(W - 48, _BIG))
         tv.textContainer().setWidthTracksTextView_(True)
         tv.setString_(initial_text)
         scroll.setDocumentView_(tv)
