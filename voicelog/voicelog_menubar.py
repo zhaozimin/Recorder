@@ -43,7 +43,7 @@ from speaker import SpeakerGate
 BASE = Path(__file__).resolve().parent
 CFG = yaml.safe_load((BASE / "config.yaml").read_text(encoding="utf-8")) or {}
 
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 
 SR = 16000
 BLOCK = 512  # Silero v5 在 16k 采样率下要求每块正好 512 个采样

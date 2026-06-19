@@ -15,6 +15,7 @@ from AppKit import (
     NSWindow, NSTextView, NSScrollView, NSButton, NSApp, NSFont,
     NSMakeRect, NSMakeSize, NSWindowStyleMaskTitled, NSBackingStoreBuffered,
     NSFloatingWindowLevel, NSBezelBorder, NSViewWidthSizable,
+    NSApplicationActivationPolicyRegular, NSApplicationActivationPolicyAccessory,
 )
 
 from ui_common import BtnTarget, make_label
@@ -85,6 +86,12 @@ class ReplaceWindow:
 
     # ---------------- 模态运行：返回 (result, text) ----------------
     def run_modal(self):
+        # 关键：菜单栏 App 默认 Accessory 策略下，窗口能显示但物理按键被送给真正的前台 App
+        # → 只能看不能打字。临时切 Regular(变成前台 App)夺回键盘，关窗后再切回 Accessory(恢复无 Dock)。
+        try:
+            NSApp.setActivationPolicy_(NSApplicationActivationPolicyRegular)
+        except Exception:
+            pass
         NSApp.activateIgnoringOtherApps_(True)
         self.win.makeKeyAndOrderFront_(None)
         self.win.makeFirstResponder_(self.tv)   # 让光标进文本框，键盘直达
@@ -97,6 +104,10 @@ class ReplaceWindow:
         try:
             self.win.orderOut_(None)
             self.win.close()
+        except Exception:
+            pass
+        try:
+            NSApp.setActivationPolicy_(NSApplicationActivationPolicyAccessory)  # 还原为菜单栏附件(无 Dock)
         except Exception:
             pass
         return self._result, text
