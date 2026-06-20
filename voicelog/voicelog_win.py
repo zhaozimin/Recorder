@@ -430,6 +430,7 @@ class TrayApp:
             pystray.Menu.SEPARATOR,
             I(f"VoiceLog v{VERSION} (Windows Beta)", None, enabled=False),
             I("📣 作者主页：zhaozimin.cn", self._open_homepage),
+            I("📚 Obsidian 资料库：guangtou.me", self._open_vault_site),
             I(i18n.t("quit"), self._quit),
         )
 
@@ -513,6 +514,10 @@ class TrayApp:
     def _open_homepage(self, icon, item):
         import webbrowser
         webbrowser.open("https://zhaozimin.cn")
+
+    def _open_vault_site(self, icon, item):
+        import webbrowser
+        webbrowser.open("https://guangtou.me")
 
     def _quit(self, icon, item):
         icon.stop()

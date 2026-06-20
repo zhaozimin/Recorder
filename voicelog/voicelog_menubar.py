@@ -625,7 +625,9 @@ class VoiceLogApp(rumps.App):
         self.quit_item = rumps.MenuItem(i18n.t("quit"), callback=self.quit_app)
         self.version_item = rumps.MenuItem(f"VoiceLog v{VERSION}")  # 无回调=不可点
         self.ad_item = rumps.MenuItem("作者主页：zhaozimin.cn", callback=self.open_homepage)
-        self._style_ad(self.ad_item)               # 红底白字粗体,醒目如广告位
+        self._style_ad(self.ad_item, "📣 作者主页：zhaozimin.cn")    # 红色粗体广告位
+        self.ad2_item = rumps.MenuItem("Obsidian 资料库：guangtou.me", callback=self.open_vault_site)
+        self._style_ad(self.ad2_item, "📚 Obsidian 资料库：guangtou.me")  # 第二条引流广告
         self.menu = [
             self.count_item,
             self.toggle_item,
@@ -643,7 +645,8 @@ class VoiceLogApp(rumps.App):
             self.note_item,
             None,  # 分隔线
             self.version_item,                       # 版本
-            self.ad_item,                            # 作者主页（红底广告位，介于版本与退出之间）
+            self.ad_item,                            # 作者主页（红字广告位）
+            self.ad2_item,                           # Obsidian 资料库（引流广告）
             self.quit_item,
         ]
 
@@ -969,8 +972,12 @@ class VoiceLogApp(rumps.App):
         import webbrowser
         webbrowser.open("https://zhaozimin.cn")
 
-    def _style_ad(self, item):
-        """把「作者主页」做成红色粗体文字的广告位（只染文字色，不加背景——红底白字看不清）。"""
+    def open_vault_site(self, _):
+        import webbrowser
+        webbrowser.open("https://guangtou.me")   # 跳转飞书 Obsidian 资料库(免费引流)
+
+    def _style_ad(self, item, text):
+        """把广告位做成红色粗体文字（只染文字色，不加背景——红底白字看不清）。"""
         try:
             from AppKit import (NSAttributedString, NSColor, NSFont,
                                 NSForegroundColorAttributeName, NSFontAttributeName)
@@ -978,9 +985,8 @@ class VoiceLogApp(rumps.App):
                 NSForegroundColorAttributeName: NSColor.systemRedColor(),
                 NSFontAttributeName: NSFont.boldSystemFontOfSize_(13),
             }
-            s = NSAttributedString.alloc().initWithString_attributes_(
-                "📣 作者主页：zhaozimin.cn", attrs)
-            item._menuitem.setAttributedTitle_(s)
+            item._menuitem.setAttributedTitle_(
+                NSAttributedString.alloc().initWithString_attributes_(text, attrs))
         except Exception:
             append_err("style_ad: " + traceback.format_exc().splitlines()[-1])
 
