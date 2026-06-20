@@ -43,7 +43,7 @@ import i18n
 
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")  # 关掉会卡死的 hf_xet(ECAPA 若走 HF)
 
-VERSION = "0.9.1"
+VERSION = "0.9.2"
 
 # ---------------- 路径：只读资源(RES) 与 可写用户数据(DATA) 解耦 ----------------
 # Windows: 数据落 %APPDATA%\VoiceLog;其他平台(便于在 Mac 上验证)落 ~/.voicelog-win。
@@ -405,7 +405,7 @@ class TrayApp:
         self.tx = FasterWhisper(MODEL_WIN, download_root=MODEL_DIR)
         self.rec = Recorder(self.state, self.tx)
         self.state["enrolled"] = self.rec.speaker.enrolled
-        self.icon = pystray.Icon("VoiceLog", _tray_image(), "VoiceLog", menu=self._menu())
+        self.icon = pystray.Icon("VoiceLog", _tray_image(), i18n.t("app_name"), menu=self._menu())
 
     # ---------------- 菜单(标题/勾选用 callable,update_menu 时重算) ----------------
     def _menu(self):
@@ -428,9 +428,10 @@ class TrayApp:
             I(i18n.t("open_note"), self._open_note),
             I("打开配置文件 / Open config", self._open_config),
             pystray.Menu.SEPARATOR,
-            I(f"VoiceLog v{VERSION} (Windows Beta)", None, enabled=False),
+            I(f"{i18n.t('app_name')} v{VERSION} (Windows Beta)", None, enabled=False),
             I("📣 作者主页：zhaozimin.cn", self._open_homepage),
-            I("📚 Obsidian 资料库：guangtou.me", self._open_vault_site),
+            I("🪨 Obsidian 资料库：guangtou.me", self._open_vault_site),
+            I("🐱 GitHub：github.com/zhaozimin", self._open_github),
             I(i18n.t("quit"), self._quit),
         )
 
@@ -449,20 +450,20 @@ class TrayApp:
 
     def _download_model_click(self, icon, item):
         if model_ready(MODEL_WIN):
-            icon.notify(i18n.t("model_check"), "VoiceLog")
+            icon.notify(i18n.t("model_check"), i18n.t("app_name"))
             return
         if self.state.get("model_dl"):
             return
         self.state["model_dl"] = True
         self.state["model_pct"] = 0
         icon.update_menu()
-        icon.notify(i18n.t("model_dling", p=0), "VoiceLog")
+        icon.notify(i18n.t("model_dling", p=0), i18n.t("app_name"))
 
         def run():
             ok = download_model(WIN_MODEL_URL, MODEL_LOCAL,
                                 lambda f: self.state.__setitem__("model_pct", round(f * 100)))
             self.state["model_dl"] = False
-            icon.notify(i18n.t("model_done") if ok else i18n.t("model_fail_t"), "VoiceLog")
+            icon.notify(i18n.t("model_done") if ok else i18n.t("model_fail_t"), i18n.t("app_name"))
             icon.update_menu()
 
         threading.Thread(target=run, daemon=True).start()
@@ -489,14 +490,14 @@ class TrayApp:
         self.state["enrolling"] = True
         icon.update_menu()
         icon.notify(i18n.t("enroll_running") + " · " + i18n.t("enroll_item", mark="").strip(),
-                    "VoiceLog")
+                    i18n.t("app_name"))
 
         def done(ok, quality):
             self.state["enrolling"] = False
             q = quality if isinstance(quality, (int, float)) else None
             msg = (i18n.t("done", q=f"{round(q*100)}%" if q is not None else "—") if ok
                    else i18n.t("failed"))
-            icon.notify(msg, "VoiceLog")
+            icon.notify(msg, i18n.t("app_name"))
             icon.update_menu()
 
         self.rec.enroll(done)
@@ -517,7 +518,12 @@ class TrayApp:
 
     def _open_vault_site(self, icon, item):
         import webbrowser
-        webbrowser.open("https://guangtou.me")
+        # 显示名仍写 guangtou.me,但直达飞书资料库
+        webbrowser.open("https://my.feishu.cn/wiki/VzguwklrZi272ukWRCccp6kMnre")
+
+    def _open_github(self, icon, item):
+        import webbrowser
+        webbrowser.open("https://github.com/zhaozimin")
 
     def _quit(self, icon, item):
         icon.stop()
@@ -536,7 +542,7 @@ class TrayApp:
                     tag = " · ⏸"
                 else:
                     tag = ""
-                self.icon.title = f"VoiceLog · {i18n.t('count', n=self.state['count']).strip()}{tag}"
+                self.icon.title = f"{i18n.t('app_name')} · {i18n.t('count', n=self.state['count']).strip()}{tag}"
                 self.icon.update_menu()
             except Exception:
                 pass

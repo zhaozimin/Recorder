@@ -2,6 +2,16 @@
 
 版本规则：小改 +0.1，大改 +1.0。
 
+## v0.9.2 — 2026-06-20
+品牌定名 +「粘贴修复」+ 分发加固。
+- **中文品牌名定为「言壤」**：菜单栏版本项、系统通知、Windows 托盘、macOS 麦克风权限列表(CFBundleDisplayName)
+  统一显示「言壤」。英文品牌 VoiceLog 保留;.app/dmg/exe 磁盘与下载文件名、`bundle id`、数据目录
+  `~/Library/Application Support/VoiceLog` 一律不变 —— 老用户数据与授权无缝延续。
+- **修复「关键词管理」窗口 `Cmd+V` 粘贴失效**：菜单栏型 App(LSUIElement)无主菜单,系统无人把 `Cmd+V`
+  翻成 `paste:` 动作。新增 `KeyWindow` 在窗口层拦截 `Cmd+C/V/X/A/Z` 转发焦点文本框,撤销/重做一并补回。
+- **模型分发加固**：下载新增字节完整性校验(连接中断即判失败,不拿截断的 zip 解压);`model_ready`
+  加最小体积门槛,挡住截断/零字节残留冒充「就绪」。
+
 ## v0.9.1 — 2026-06-19
 三个打包后才暴露的关键修复（v0.9.0 装成 App 后才出现，源码运行不受影响）。
 - **修复「不停弹出多个 App」（分叉炸弹）**：torch/speechbrain 用多进程(macOS/Windows 默认 spawn)，

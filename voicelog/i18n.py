@@ -113,6 +113,7 @@ def prompt() -> str:
 # ============================================================================
 STRINGS = {
     "zh": {
+        "app_name": "言壤",
         "count": "今日已记：{n} 条", "drop": "，滤除 {d}", "backup": "（备用盘）",
         "pause": "暂停录音", "resume": "继续录音",
         "mark_done": "已注册", "mark_todo": "未注册",
@@ -146,6 +147,7 @@ STRINGS = {
         "prompt_terms": " 可能出现的词：{terms}。",
     },
     "en": {
+        "app_name": "VoiceLog",
         "count": "Logged today: {n}", "drop": " · filtered {d}", "backup": " (backup)",
         "pause": "Pause recording", "resume": "Resume recording",
         "mark_done": "registered", "mark_todo": "not set",
@@ -180,6 +182,7 @@ STRINGS = {
         "prompt_terms": " Possible terms: {terms}.",
     },
     "ja": {
+        "app_name": "VoiceLog",
         "count": "本日の記録：{n} 件", "drop": "・除外 {d}", "backup": "（予備）",
         "pause": "録音を一時停止", "resume": "録音を再開",
         "mark_done": "登録済み", "mark_todo": "未登録",

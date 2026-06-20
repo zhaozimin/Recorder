@@ -3,8 +3,10 @@
 ;  把 PyInstaller 产出的 dist\VoiceLog\ 打成单文件安装程序。
 ;  TODO(移植时): 确认 dist 路径;补 .ico;可选「开机自启」复选框写注册表 Run 键。
 ; ============================================================================
-#define MyAppName "VoiceLog"
-#define MyAppVersion "0.9.1"
+; 显示名「言壤」(开始菜单/控制面板/向导可见);安装目录/输出文件名/exe 名保持 ASCII(VoiceLog)。
+#define MyAppName "言壤"
+#define MyAppNameAscii "VoiceLog"
+#define MyAppVersion "0.9.2"
 #define MyAppPublisher "Zimin Zhao"
 #define MyAppExeName "VoiceLog.exe"
 
@@ -12,7 +14,7 @@
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\{#MyAppName}
+DefaultDirName={autopf}\{#MyAppNameAscii}
 DefaultGroupName={#MyAppName}
 OutputDir=Output
 OutputBaseFilename=VoiceLog-{#MyAppVersion}-Setup
@@ -37,7 +39,7 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startup
 
 [Tasks]
-Name: "startup"; Description: "开机自动启动 VoiceLog"; GroupDescription: "附加任务:"
+Name: "startup"; Description: "开机自动启动言壤"; GroupDescription: "附加任务:"
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "立即启动 VoiceLog"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "立即启动言壤"; Flags: nowait postinstall skipifsilent

@@ -1,4 +1,4 @@
-# Recorder · VoiceLog — 本地实时语音日志
+# 言壤（VoiceLog）— 本地实时语音日志
 
 > 随身麦克风 → 本地 Whisper 实时转写 → Markdown 笔记。macOS 菜单栏常驻,**音频绝不写盘,文字永不上传**。
 

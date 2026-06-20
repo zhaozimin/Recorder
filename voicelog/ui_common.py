@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-[INPUT]: 依赖 AppKit/Foundation(PyObjC，rumps 已带入) 的 NSObject/NSTextField/NSFont
-[OUTPUT]: 对外提供 BtnTarget(按钮回调桥) 与 make_label(只读标签 helper)
+[INPUT]: 依赖 AppKit/Foundation(PyObjC，rumps 已带入) 的 NSWindow/NSObject/NSTextField/NSFont/NSEvent 修饰键常量
+[OUTPUT]: 对外提供 KeyWindow(补回编辑快捷键的模态窗基类)、BtnTarget(按钮回调桥)、make_label/make_rich_label(只读标签)、push_regular/pop_regular(前台策略计数)、字体颜色 helper
 [POS]: voicelog 各原生窗口(enroll_ui / replace_ui)的公共底座，消除按钮桥与标签的重复代码。
 [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 
@@ -10,10 +10,11 @@
 """
 import objc
 from AppKit import (
-    NSTextField, NSFont, NSColor, NSApp,
+    NSWindow, NSTextField, NSFont, NSColor, NSApp,
     NSMutableParagraphStyle, NSFontAttributeName,
     NSForegroundColorAttributeName, NSParagraphStyleAttributeName,
     NSApplicationActivationPolicyRegular, NSApplicationActivationPolicyAccessory,
+    NSEventModifierFlagCommand, NSEventModifierFlagShift,
 )
 from Foundation import NSObject, NSAttributedString, NSMutableAttributedString
 
@@ -48,6 +49,36 @@ def pop_regular():
             NSApp.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
         except Exception:
             pass
+
+
+# ============================================================================
+#  可编辑模态窗口：补回标准编辑快捷键(Cmd+X/C/V/A/Z)。
+#  LSUIElement App 无主菜单 → 系统没人把 Cmd+V 翻成 paste: 动作 → 文本框收不到粘贴。
+#  在窗口层拦截命令键，转发给第一响应者(文本框)。此路径有 Esc 按钮佐证：模态循环里
+#  NSWindow.performKeyEquivalent_ 确被调用。命中即吞，未命中(sendAction 返回假)落回 super，
+#  按钮的 Esc/回车等价物照常工作。一处子类，所有文本输入窗复用。
+# ============================================================================
+_EDIT_SEL = {"x": "cut:", "c": "copy:", "v": "paste:", "a": "selectAll:", "z": "undo:"}
+
+
+class KeyWindow(NSWindow):
+    def performKeyEquivalent_(self, event):
+        if event.modifierFlags() & NSEventModifierFlagCommand:
+            ch = (event.charactersIgnoringModifiers() or "").lower()
+            sel = _EDIT_SEL.get(ch)
+            if ch == "z" and (event.modifierFlags() & NSEventModifierFlagShift):
+                sel = "redo:"   # Cmd+Shift+Z = 重做
+            if sel:
+                # 一级：直投本窗口第一响应者(焦点文本框)。剪贴板四件套(剪切/复制/粘贴/全选)
+                # 文本框自身即应答，不依赖 key window 状态——performKeyEquivalent_ 正由持有焦点的本窗口调用。
+                r = self.firstResponder()
+                if r is not None and r.respondsToSelector_(sel):
+                    r.performSelector_withObject_(sel, None)   # sender=nil:标准编辑动作不关心来源
+                    return True
+                # 二级：撤销/重做(undo:/redo:)文本框不直接应答，落回完整响应者链至 undo manager。
+                if NSApp.sendAction_to_from_(sel, None, self):
+                    return True
+        return objc.super(KeyWindow, self).performKeyEquivalent_(event)
 
 
 # ============================================================================

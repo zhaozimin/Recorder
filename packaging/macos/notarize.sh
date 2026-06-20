@@ -52,7 +52,7 @@ rm -f "$DMG"
 STAGE="$(mktemp -d)"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
-hdiutil create -volname "VoiceLog $VER" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+hdiutil create -volname "言壤 $VER" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
 rm -rf "$STAGE"
 codesign --force --timestamp -s "$DEV_ID" "$DMG"
 

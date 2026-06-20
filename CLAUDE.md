@@ -1,7 +1,15 @@
-# VoiceLog — 本地实时语音日志（macOS 菜单栏常驻）
+# 言壤（VoiceLog）— 本地实时语音日志（macOS 菜单栏常驻）
 Python 3.12(uv) + mlx-whisper(large-v3) + silero-vad + speechbrain(ECAPA) + sounddevice + rumps + launchd
 
 把贴身 DJI Mic Mini 的语音实时转成当天 Markdown 日志。**音频绝不写盘，文字不上传**，全本地。
+
+<branding>
+中文品牌名「言壤」，英文 VoiceLog。二者分工：
+  显示名(用户所见) = 言壤 —— i18n 的 app_name(zh)、CFBundleName/CFBundleDisplayName、DMG 卷名、Windows 开始菜单/控制面板。
+  机器名(稳定不可改) = VoiceLog —— .app/dmg/exe 磁盘与下载文件名、可执行名、安装目录、
+    bundle id `com.zhaozimin.voicelog`、数据目录 `~/Library/Application Support/VoiceLog`。
+铁律：机器名一旦改动 → 老用户数据/授权全失联。改名只动显示层，永不动机器层。
+</branding>
 
 <directory>
 voicelog/  - 应用本体 (主程序 voicelog_menubar.py + 声纹子模块 speaker.py + 配置 + 依赖 + 日志)

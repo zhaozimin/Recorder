@@ -24,12 +24,19 @@ MAC_MODEL_URL = GITHUB_MODELS_BASE + "/whisper-mlx-turbo.zip"   # macOS / MLX
 WIN_MODEL_URL = GITHUB_MODELS_BASE + "/whisper-ct2-turbo.zip"   # Windows / faster-whisper(CT2)
 
 
+_MIN_WEIGHT = 1 << 20   # 1MB:whisper 权重均数百 MB,远高于此 → 挡住零字节/截断残留冒充就绪
+
+
 def model_ready(model_dir) -> bool:
-    """目录里有权重即视为就绪。mlx: weights.*(.npz/.safetensors);CT2: model.bin。"""
+    """目录里有「足量」权重才算就绪。mlx: weights.*(.npz/.safetensors);CT2: model.bin。
+    带最小体积校验:中断/零字节残留通不过存在性以外的这道门。"""
     d = Path(model_dir)
     if not d.is_dir():
         return False
-    return bool(list(d.glob("weights.*"))) or (d / "model.bin").exists()
+    if any(w.stat().st_size >= _MIN_WEIGHT for w in d.glob("weights.*")):
+        return True
+    mb = d / "model.bin"
+    return mb.exists() and mb.stat().st_size >= _MIN_WEIGHT
 
 
 def _find_model_root(d: Path) -> Path:
@@ -61,6 +68,8 @@ def download_model(url: str, dest_dir, progress_cb=None) -> bool:
                 done += len(chunk)
                 if progress_cb and total:
                     progress_cb(min(1.0, done / total))
+        if total and done != total:
+            return False          # 连接中途断开:字节数对不上 → 别拿截断的 zip 去解压
         tmp_ext = Path(tempfile.mkdtemp())
         with zipfile.ZipFile(tmp_zip) as z:
             z.extractall(tmp_ext)

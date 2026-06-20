@@ -48,7 +48,7 @@ import i18n
 # 故配置/日志/声纹必须落在用户可写区。两种形态：
 #   · 打包(.app)：资源在 bundle(_MEIPASS)，数据在 ~/Library/Application Support/VoiceLog
 #   · 源码(开发)：资源与数据都在代码旁——保持旧行为，现有 launchd 部署零改动
-VERSION = "0.9.1"
+VERSION = "0.9.2"
 
 FROZEN = getattr(sys, "frozen", False)
 RES = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent
@@ -623,11 +623,13 @@ class VoiceLogApp(rumps.App):
         self.note_item = rumps.MenuItem(i18n.t("open_note"), callback=self.open_note)
         self.model_item = rumps.MenuItem(self._model_title(), callback=self.do_model)
         self.quit_item = rumps.MenuItem(i18n.t("quit"), callback=self.quit_app)
-        self.version_item = rumps.MenuItem(f"VoiceLog v{VERSION}")  # 无回调=不可点
+        self.version_item = rumps.MenuItem(f"{i18n.t('app_name')} v{VERSION}")  # 无回调=不可点
         self.ad_item = rumps.MenuItem("作者主页：zhaozimin.cn", callback=self.open_homepage)
-        self._style_ad(self.ad_item, "📣 作者主页：zhaozimin.cn")    # 红色粗体广告位
+        self._style_ad(self.ad_item, "📣 作者主页：zhaozimin.cn", (0.39, 0.58, 0.86))      # 柔和蓝
         self.ad2_item = rumps.MenuItem("Obsidian 资料库：guangtou.me", callback=self.open_vault_site)
-        self._style_ad(self.ad2_item, "📚 Obsidian 资料库：guangtou.me")  # 第二条引流广告
+        self._style_ad(self.ad2_item, "🪨 Obsidian 资料库：guangtou.me", (0.40, 0.72, 0.52))  # 柔和绿·黑曜石
+        self.ad3_item = rumps.MenuItem("GitHub：github.com/zhaozimin", callback=self.open_github)
+        self._style_ad(self.ad3_item, "🐱 GitHub：github.com/zhaozimin", (0.90, 0.70, 0.20))  # 柔和黄·Octocat 小猫
         self.menu = [
             self.count_item,
             self.toggle_item,
@@ -645,8 +647,9 @@ class VoiceLogApp(rumps.App):
             self.note_item,
             None,  # 分隔线
             self.version_item,                       # 版本
-            self.ad_item,                            # 作者主页（红字广告位）
-            self.ad2_item,                           # Obsidian 资料库（引流广告）
+            self.ad_item,                            # 作者主页（柔和蓝）
+            self.ad2_item,                           # Obsidian 资料库（柔和绿）
+            self.ad3_item,                           # GitHub（柔和黄）
             self.quit_item,
         ]
 
@@ -898,7 +901,7 @@ class VoiceLogApp(rumps.App):
             self.model_item.title = self._model_title()
             r = self.state.pop("model_result", None)
             if r == "ok":
-                rumps.notification("VoiceLog", "", i18n.t("model_done"))
+                rumps.notification(i18n.t("app_name"), "", i18n.t("model_done"))
             elif r == "fail":
                 rumps.alert(i18n.t("model_fail_t"), model_hint(MAC_MODEL_URL, str(MODEL)))
         model_missing = MANAGED_MODEL and not model_ready(MODEL)
@@ -933,7 +936,7 @@ class VoiceLogApp(rumps.App):
 
     def do_model(self, _):
         if model_ready(MODEL):
-            rumps.alert("VoiceLog", i18n.t("model_check"))
+            rumps.alert(i18n.t("app_name"), i18n.t("model_check"))
             return
         if self.state.get("model_dl"):
             return
@@ -974,15 +977,21 @@ class VoiceLogApp(rumps.App):
 
     def open_vault_site(self, _):
         import webbrowser
-        webbrowser.open("https://guangtou.me")   # 跳转飞书 Obsidian 资料库(免费引流)
+        # 显示名仍写 guangtou.me,但直达飞书资料库(免费引流)
+        webbrowser.open("https://my.feishu.cn/wiki/VzguwklrZi272ukWRCccp6kMnre")
 
-    def _style_ad(self, item, text):
-        """把广告位做成红色粗体文字（只染文字色，不加背景——红底白字看不清）。"""
+    def open_github(self, _):
+        import webbrowser
+        webbrowser.open("https://github.com/zhaozimin")   # GitHub 主页(分享其他工具)
+
+    def _style_ad(self, item, text, rgb):
+        """把广告位做成柔和彩色粗体文字（只染文字色，不加背景）。rgb=(r,g,b) 各 0~1。"""
         try:
             from AppKit import (NSAttributedString, NSColor, NSFont,
                                 NSForegroundColorAttributeName, NSFontAttributeName)
             attrs = {
-                NSForegroundColorAttributeName: NSColor.systemRedColor(),
+                NSForegroundColorAttributeName:
+                    NSColor.colorWithSRGBRed_green_blue_alpha_(rgb[0], rgb[1], rgb[2], 1.0),
                 NSFontAttributeName: NSFont.boldSystemFontOfSize_(13),
             }
             item._menuitem.setAttributedTitle_(
