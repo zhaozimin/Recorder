@@ -27,6 +27,11 @@ datas += [
     (os.path.join(SRC, "config.example.yaml"), "."),
 ]
 
+# --- 离线版:VOICELOG_BUNDLE_MODEL=<模型目录> 时把模型打进 bundle(运行时在 RES/models),零联网 ---
+_bundle_model = os.environ.get("VOICELOG_BUNDLE_MODEL")
+if _bundle_model and os.path.isdir(_bundle_model):
+    datas += [(_bundle_model, "models/whisper-mlx-turbo")]
+
 # --- 动态/懒加载导入:静态分析抓不到,显式补 ---
 hiddenimports += [
     "speechbrain.inference.speaker",   # speaker.py 里函数内懒导入

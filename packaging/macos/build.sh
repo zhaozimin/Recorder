@@ -16,7 +16,10 @@ DEV_ID="${DEV_ID:-Developer ID Application: Zimin Zhao (NNB86K8P8S)}"
 ENT="$HERE/entitlements.plist"
 DIST="$PROJ/dist"
 APP="$DIST/VoiceLog.app"
-DMG="$DIST/VoiceLog-$VER.dmg"
+# 离线版(设了 VOICELOG_BUNDLE_MODEL=<模型目录>,spec 会把模型打进 bundle)→ DMG 名带 -offline
+SUFFIX=""
+[ -n "${VOICELOG_BUNDLE_MODEL:-}" ] && SUFFIX="-offline"
+DMG="$DIST/VoiceLog-$VER$SUFFIX.dmg"
 
 echo "==> [1/5] 清理旧产物"
 rm -rf "$PROJ/build" "$DIST"

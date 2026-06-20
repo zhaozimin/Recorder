@@ -20,7 +20,9 @@ TEAM_ID="${TEAM_ID:-NNB86K8P8S}"
 PROFILE="${NOTARY_PROFILE:-voicelog-notary}"
 DIST="$PROJ/dist"
 APP="$DIST/VoiceLog.app"
-DMG="$DIST/VoiceLog-$VER.dmg"
+SUFFIX=""
+[ -n "${VOICELOG_BUNDLE_MODEL:-}" ] && SUFFIX="-offline"   # 与 build.sh 命名一致
+DMG="$DIST/VoiceLog-$VER$SUFFIX.dmg"
 ZIP="$DIST/VoiceLog.zip"
 
 [ -d "$APP" ] || { echo "!! 未找到 $APP,请先运行 build.sh"; exit 1; }

@@ -73,9 +73,11 @@ MODEL = CFG.get("model", "mlx-community/whisper-large-v3-turbo")
 # 模型来源:config 写 "auto"(打包默认)→ 本程序托管,放 DATA/models,缺失则从 GitHub 下载(国内可达);
 # 写 HF repo 名或本地路径 → 直接用(开发/进阶,行为不变)。
 MANAGED_MODEL = str(MODEL).strip().lower() == "auto"
-MODEL_LOCAL = DATA / "models" / "whisper-mlx-turbo"
+MODEL_LOCAL = DATA / "models" / "whisper-mlx-turbo"      # 普通版:下载到这里
+MODEL_BUNDLED = RES / "models" / "whisper-mlx-turbo"     # 离线版:模型已打进 bundle
 if MANAGED_MODEL:
-    MODEL = str(MODEL_LOCAL)
+    # 离线版(bundle 内有模型)直接用,否则用下载目录——同一份代码两种形态,零分支差异
+    MODEL = str(MODEL_BUNDLED) if model_ready(MODEL_BUNDLED) else str(MODEL_LOCAL)
 MAX_UTT_SEC = float(CFG.get("max_utterance_sec", 30))
 MIN_SILENCE_MS = int(CFG.get("min_silence_ms", 700))
 INPUT_DEVICE = CFG.get("input_device", None)  # None=系统默认；可填编号或名字片段(如 "DJI")
