@@ -622,6 +622,9 @@ class VoiceLogApp(rumps.App):
         self.note_item = rumps.MenuItem(i18n.t("open_note"), callback=self.open_note)
         self.model_item = rumps.MenuItem(self._model_title(), callback=self.do_model)
         self.quit_item = rumps.MenuItem(i18n.t("quit"), callback=self.quit_app)
+        self.version_item = rumps.MenuItem(f"VoiceLog v{VERSION}")  # 无回调=不可点
+        self.ad_item = rumps.MenuItem("作者主页：zhaozimin.cn", callback=self.open_homepage)
+        self._style_ad(self.ad_item)               # 红底白字粗体,醒目如广告位
         self.menu = [
             self.count_item,
             self.toggle_item,
@@ -638,7 +641,8 @@ class VoiceLogApp(rumps.App):
             self.kw_item,
             self.note_item,
             None,  # 分隔线
-            rumps.MenuItem(f"VoiceLog v{VERSION}"),  # 版本（无回调=不可点）
+            self.version_item,                       # 版本
+            self.ad_item,                            # 作者主页（红底广告位，介于版本与退出之间）
             self.quit_item,
         ]
 
@@ -946,6 +950,28 @@ class VoiceLogApp(rumps.App):
         if not note.exists():
             note.write_text("", encoding="utf-8")
         subprocess.run(["open", str(note)])
+
+    def open_homepage(self, _):
+        import webbrowser
+        webbrowser.open("https://zhaozimin.cn")
+
+    def _style_ad(self, item):
+        """把「作者主页」做成红底白字粗体的广告位。macOS 菜单项整行无法上色，
+        故用富文本给文字加红色背景属性（原生可稳妥实现的最接近效果）。"""
+        try:
+            from AppKit import (NSAttributedString, NSColor, NSFont,
+                                NSForegroundColorAttributeName,
+                                NSBackgroundColorAttributeName, NSFontAttributeName)
+            attrs = {
+                NSForegroundColorAttributeName: NSColor.whiteColor(),
+                NSBackgroundColorAttributeName: NSColor.systemRedColor(),
+                NSFontAttributeName: NSFont.boldSystemFontOfSize_(13),
+            }
+            s = NSAttributedString.alloc().initWithString_attributes_(
+                "  📣 作者主页：zhaozimin.cn  ", attrs)
+            item._menuitem.setAttributedTitle_(s)
+        except Exception:
+            append_err("style_ad: " + traceback.format_exc().splitlines()[-1])
 
     def quit_app(self, _):
         rumps.quit_application()

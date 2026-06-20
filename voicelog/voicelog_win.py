@@ -429,6 +429,7 @@ class TrayApp:
             I("打开配置文件 / Open config", self._open_config),
             pystray.Menu.SEPARATOR,
             I(f"VoiceLog v{VERSION} (Windows Beta)", None, enabled=False),
+            I("📣 作者主页：zhaozimin.cn", self._open_homepage),
             I(i18n.t("quit"), self._quit),
         )
 
@@ -508,6 +509,10 @@ class TrayApp:
 
     def _open_config(self, icon, item):
         _open_path(CONFIG_PATH)
+
+    def _open_homepage(self, icon, item):
+        import webbrowser
+        webbrowser.open("https://zhaozimin.cn")
 
     def _quit(self, icon, item):
         icon.stop()
