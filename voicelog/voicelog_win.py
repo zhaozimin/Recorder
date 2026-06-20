@@ -43,7 +43,7 @@ import i18n
 
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")  # 关掉会卡死的 hf_xet(ECAPA 若走 HF)
 
-VERSION = "0.9.0"
+VERSION = "0.9.1"
 
 # ---------------- 路径：只读资源(RES) 与 可写用户数据(DATA) 解耦 ----------------
 # Windows: 数据落 %APPDATA%\VoiceLog;其他平台(便于在 Mac 上验证)落 ~/.voicelog-win。

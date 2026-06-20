@@ -36,6 +36,7 @@ if _bundle_model and os.path.isdir(_bundle_model):
 hiddenimports += [
     "speechbrain.inference.speaker",   # speaker.py 里函数内懒导入
     "objc", "AppKit", "Foundation", "PyObjCTools",  # rumps + 原生窗口
+    "AVFoundation", "CoreMedia", "CoreAudio",       # 主动申请麦克风权限(_request_mic)
     "sklearn",                          # speechbrain 部分路径会用到
 ]
 hiddenimports += collect_submodules("speechbrain")
@@ -73,12 +74,12 @@ app = BUNDLE(
     name="VoiceLog.app",
     icon=os.path.join(SPEC_DIR, "VoiceLog.icns"),
     bundle_identifier="com.zhaozimin.voicelog",
-    version="0.9.0",
+    version="0.9.1",
     info_plist={
         "CFBundleName": "VoiceLog",
         "CFBundleDisplayName": "VoiceLog",
-        "CFBundleShortVersionString": "0.9.0",
-        "CFBundleVersion": "0.9.0",
+        "CFBundleShortVersionString": "0.9.1",
+        "CFBundleVersion": "0.9.1",
         "LSUIElement": True,                 # 菜单栏常驻,无 Dock 图标
         "LSMinimumSystemVersion": "13.0",
         "NSMicrophoneUsageDescription":

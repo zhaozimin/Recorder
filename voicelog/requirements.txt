@@ -6,3 +6,4 @@ rumps
 pyyaml
 tzdata
 speechbrain   # 声纹门控(ECAPA-TDNN 说话人验证)；依赖 torch/torchaudio(silero 已带入)
+pyobjc-framework-AVFoundation  # 启动主动申请麦克风权限(macOS)

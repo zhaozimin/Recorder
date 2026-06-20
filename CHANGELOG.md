@@ -2,6 +2,16 @@
 
 版本规则：小改 +0.1，大改 +1.0。
 
+## v0.9.1 — 2026-06-19
+三个打包后才暴露的关键修复（v0.9.0 装成 App 后才出现，源码运行不受影响）。
+- **修复「不停弹出多个 App」（分叉炸弹）**：torch/speechbrain 用多进程(macOS/Windows 默认 spawn)，
+  冻结的 App 子进程会把整个程序重跑一遍 → 无限繁殖。入口加 `multiprocessing.freeze_support()` 根治。
+- **修复「装成 App 后收不到声音」**：无麦克风权限时 CoreAudio 对 App 隐藏所有输入设备，PortAudio 在
+  查设备阶段就失败、走不到能触发系统授权弹窗的「打开流」。改为启动时用 **AVFoundation 主动申请麦克风权限**
+  → 可靠弹窗、可靠出现在「系统设置→隐私→麦克风」。(macOS 专属;新增依赖 pyobjc-framework-AVFoundation)
+- **作者主页广告位改为红色文字**（去掉红底——红底白字看不清）。
+- 版本号 → `0.9.1`（mac/win 同步）。
+
 ## v0.9.0 — 2026-06-19
 模型分发加固（三层），治「装了下不动模型 = 看起来坏了」。根因：粉丝多在国内，而模型在 HuggingFace 上，
 hf_xet 会卡死、hf-mirror 也与新版 huggingface_hub 不兼容。

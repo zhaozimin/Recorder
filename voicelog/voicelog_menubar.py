@@ -48,7 +48,7 @@ import i18n
 # 故配置/日志/声纹必须落在用户可写区。两种形态：
 #   · 打包(.app)：资源在 bundle(_MEIPASS)，数据在 ~/Library/Application Support/VoiceLog
 #   · 源码(开发)：资源与数据都在代码旁——保持旧行为，现有 launchd 部署零改动
-VERSION = "0.9.0"
+VERSION = "0.9.1"
 
 FROZEN = getattr(sys, "frozen", False)
 RES = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent
@@ -586,6 +586,7 @@ class Recorder(threading.Thread):
 class VoiceLogApp(rumps.App):
     def __init__(self):
         super().__init__("", quit_button=None)   # 标题留空，用自定义图标
+        self._request_mic()      # 主动申请麦克风权限——靠 PortAudio 触发弹窗不可靠(无权限时它在查设备阶段就失败)
         self._has_icon = False
         self._setup_icon()
         self.state = {"count": 0, "last": "", "err": "", "live": False,
@@ -951,24 +952,34 @@ class VoiceLogApp(rumps.App):
             note.write_text("", encoding="utf-8")
         subprocess.run(["open", str(note)])
 
+    def _request_mic(self):
+        """启动即用 AVFoundation 显式申请麦克风权限。原因:无权限时 CoreAudio 对本 App 隐藏所有
+        输入设备,PortAudio 在查设备阶段(query device -1)就失败、根本走不到能触发系统弹窗的「打开流」。
+        显式申请可靠弹窗、可靠让 VoiceLog 出现在「系统设置→隐私→麦克风」。已授权则无操作;被拒由用户去设置开。"""
+        try:
+            import AVFoundation
+            t = AVFoundation.AVMediaTypeAudio
+            if AVFoundation.AVCaptureDevice.authorizationStatusForMediaType_(t) == 0:  # 0=未决定
+                AVFoundation.AVCaptureDevice.requestAccessForMediaType_completionHandler_(
+                    t, lambda granted: None)
+        except Exception:
+            append_err("request_mic: " + traceback.format_exc().splitlines()[-1])
+
     def open_homepage(self, _):
         import webbrowser
         webbrowser.open("https://zhaozimin.cn")
 
     def _style_ad(self, item):
-        """把「作者主页」做成红底白字粗体的广告位。macOS 菜单项整行无法上色，
-        故用富文本给文字加红色背景属性（原生可稳妥实现的最接近效果）。"""
+        """把「作者主页」做成红色粗体文字的广告位（只染文字色，不加背景——红底白字看不清）。"""
         try:
             from AppKit import (NSAttributedString, NSColor, NSFont,
-                                NSForegroundColorAttributeName,
-                                NSBackgroundColorAttributeName, NSFontAttributeName)
+                                NSForegroundColorAttributeName, NSFontAttributeName)
             attrs = {
-                NSForegroundColorAttributeName: NSColor.whiteColor(),
-                NSBackgroundColorAttributeName: NSColor.systemRedColor(),
+                NSForegroundColorAttributeName: NSColor.systemRedColor(),
                 NSFontAttributeName: NSFont.boldSystemFontOfSize_(13),
             }
             s = NSAttributedString.alloc().initWithString_attributes_(
-                "  📣 作者主页：zhaozimin.cn  ", attrs)
+                "📣 作者主页：zhaozimin.cn", attrs)
             item._menuitem.setAttributedTitle_(s)
         except Exception:
             append_err("style_ad: " + traceback.format_exc().splitlines()[-1])
