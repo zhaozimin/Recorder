@@ -13,10 +13,13 @@
   - `notarize.sh`: notarytool 提交公证(App+DMG)→stapler 装订(离线可验)。需 Apple ID 专用密码。
   - `make_icon.py`: 把品牌白 logo 合成深色 squircle → master PNG;配 sips/iconutil 产 `VoiceLog.icns`。
   - `VoiceLog.icns`: App/Dock/Finder/DMG 图标(make_icon.py 产物,提交入库供构建直接用)。
-- `windows/`: Windows 移植脚手架(**未实现**)。
-  - `PORT_PLAN.md`: 移植架构蓝图——平台差异收敛到 transcriber/tray/windows_ui 三接口,core 对平台无感。
-  - `requirements-windows.txt`: Windows 依赖(faster-whisper/pystray/tkinter,去掉 mlx/rumps/pyobjc)。
-  - `VoiceLog-win.spec` / `installer.iss`: PyInstaller + Inno Setup 骨架,待移植落地填实。
+- `windows/`: Windows 实验版(**Beta 已实现**,未签名/未真机验证,CI 构建)。入口 `voicelog/voicelog_win.py`。
+  - `PORT_PLAN.md`: 移植方案 + 实现现状 + 已知债(大脑暂复制未共享)。
+  - `requirements-windows.txt`: Windows 依赖(faster-whisper/pystray,去掉 mlx/rumps/pyobjc)。
+  - `VoiceLog-win.spec`: PyInstaller(收集 faster_whisper/ctranslate2/silero/sounddevice/speechbrain/pystray,
+    排除 mlx/rumps/pyobjc;hiddenimport `pystray._win32`)。
+  - `installer.iss`: Inno Setup,把 dist\VoiceLog 打成 `VoiceLog-x.y.z-Setup.exe`(含开机自启选项)。
+  - `make_ico.py` / `VoiceLog.ico`: 深色 squircle + 白 logo 的多尺寸 .ico(exe/安装器图标)。
 
 ## 关键设计：只读资源 vs 可写数据
 打包版严守「bundle 只读、用户数据写 ~/Library/Application Support/VoiceLog」——主程序 `voicelog_menubar.py`

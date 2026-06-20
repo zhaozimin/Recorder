@@ -1,7 +1,27 @@
-# VoiceLog · Windows 移植方案 (脚手架)
+# VoiceLog · Windows 移植方案
 
-> 状态: **未实现，骨架就绪**。macOS 版已交付；Windows 是一次真正的移植，非重新打包。
-> 本文是移植的架构蓝图 + CI 跑道。决定推进时，按此落地即可。
+> 状态: **Beta 已实现**。macOS 版(mlx)与 Windows 版(faster-whisper)并存。
+> Windows 版未签名(SmartScreen 会警告),由 GitHub Actions 构建,供粉丝自测。
+
+## 实现现状(Beta)
+
+采用**务实的自包含方案**(非下文的 core/ 完整重构——那是未来清理目标):
+- `voicelog/voicelog_win.py`: Windows/跨平台托盘入口。复用跨平台模块 `i18n`、`speaker`、`silero_vad`、
+  `sounddevice`;转写注入 `transcribe_fw.FasterWhisper`;托盘用 **pystray**;**无弹窗 UI**——
+  设置/关键词改 config.yaml(托盘「打开配置文件」),声纹注册走托盘+系统通知。含 v0.8.1 掉线自愈看门狗。
+- `voicelog/transcribe_fw.py`: faster-whisper(CTranslate2)封装,接口与 mlx_whisper.transcribe 对齐
+  (吃 16k float32,吐文本)。有 N 卡走 cuda/float16,否则 cpu/int8。
+- 数据落 `%APPDATA%\VoiceLog`(config/日志/声纹);模型 `model_win`(默认 faster-whisper-large-v3)首用下载。
+- 打包 `packaging/windows/`: `VoiceLog-win.spec`(收集 faster_whisper/ctranslate2/silero/sounddevice/
+  speechbrain/pystray,排除 mlx/rumps/pyobjc) + `installer.iss`(Inno Setup) + `make_ico.py`/`VoiceLog.ico`。
+- **可在 Mac 上验证主链路**:faster-whisper/silero/sounddevice 跨平台,Mac 亦能跑(仅打包成 .exe 须 CI)。
+
+> ⚠️ **已知技术债**:`voicelog_win.py` 复制了一份「大脑」(幻觉过滤 `_looped`/`is_junk`、`_rms_dbfs`、
+> `apply_replace`)而非与 macOS 共享。两端须同步改,否则会漂移。未来清理=抽 `core/`(见下)。
+
+---
+
+> 以下为**完整重构蓝图**(理想终态,Beta 未走这条,留作未来统一两端时参考)。
 
 ## 一、为什么是「移植」而非「打包」
 

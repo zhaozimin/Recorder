@@ -5,6 +5,11 @@
 
 ## 成员清单
 - `voicelog_menubar.py`: 主程序与唯一进程。采集(sounddevice) → 切句(silero VADIterator) → **转写前三道门**(时长/能量近场/声纹) → 转写(mlx-whisper large-v3) → 复读+水印过滤 → 专名纠错 → 按时区写当天笔记(外置盘掉线回退内置)。rumps 菜单栏：计数/滤除数、暂停、注册声音、声纹门开关、时区、保存位置、打开笔记。
+- `voicelog_win.py`: **Windows/跨平台托盘版入口**(与 macOS 的 voicelog_menubar.py 对等)。同构管线
+  (采集→VAD→三道门→转写→过滤→写盘)+ 掉线自愈;转写注入 `transcribe_fw`,托盘用 pystray,无弹窗 UI
+  (设置改 config.yaml,声纹注册走托盘+系统通知)。数据落 `%APPDATA%\VoiceLog`。复用 speaker/i18n。
+- `transcribe_fw.py`: faster-whisper(CTranslate2) 转写封装,接口与 mlx_whisper.transcribe 对齐(吃 16k
+  float32,吐文本)。有 N 卡 cuda/float16,否则 cpu/int8。Windows 端的转写引擎,亦可在 Mac 验证。
 - `speaker.py`: 声纹门控子模块。`SpeakerGate` 用 ECAPA-TDNN(speechbrain) 把语音映射成 192 维音色指纹，注册机主质心后逐句算余弦相似度裁决「是不是机主」。懒加载、fail-open(未注册/故障一律放行)、附「提取质量」自一致性指标。
 - `enroll_ui.py`: 声纹注册 UI 面(PyObjC/Cocoa)。`EnrollWindow` 两阶段：须知页(本地/隐私说明+开始按钮，不录音)→点开始→朗读页(句子+进度条)。纯展示层，采集逻辑在主文件 `Recorder.enroll`(质量驱动)，进度由 rumps.Timer 喂。
 - `replace_ui.py`: 关键词管理 UI 面(PyObjC/Cocoa，**模态**——无 Dock 进程唯有模态窗口能稳拿键盘焦点)。`ReplaceWindow.run_modal()` 返回编辑后的文本，主文件 `parse_corrections`/`write_corrections` 解析为「精确纠错 rules(`错=正`) + 识别词库 terms(单写目标词，注入 prompt)」并写回 config。

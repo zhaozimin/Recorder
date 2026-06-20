@@ -2,6 +2,19 @@
 
 版本规则：小改 +0.1，大改 +1.0。
 
+## v0.8.1-win-beta — 2026-06-19
+新增 Windows 实验版（Beta，未签名/未真机验证）。与 macOS 同一 0.8.1 功能集的跨平台移植。
+- **新增 `voicelog/voicelog_win.py`**：跨平台托盘入口。复用内核 `speaker`/`i18n`/`silero_vad`/`sounddevice`
+  + 三道门 + 幻觉过滤 + v0.8.1 掉线自愈看门狗；托盘用 **pystray**；**无弹窗**——设置/关键词改 config.yaml
+  （托盘"打开配置文件"），声纹注册走托盘+系统通知。数据落 `%APPDATA%\VoiceLog`。
+- **新增 `voicelog/transcribe_fw.py`**：faster-whisper(CTranslate2) 转写封装，接口与 mlx_whisper 对齐；
+  有 N 卡走 cuda/float16，否则 cpu/int8。新增配置 `model_win` / `model_win_dir`。
+- **打包 `packaging/windows/`**：`VoiceLog-win.spec`(PyInstaller) + `installer.iss`(Inno Setup) +
+  `make_ico.py`/`VoiceLog.ico`；CI `.github/workflows/build-windows.yml` 在 windows-latest 出 .exe。
+- **已在 macOS 上验证主链路**：faster-whisper(CPU/int8) 转写、TrayApp 构造、幻觉过滤大脑均通过。
+  Windows 特有的托盘/集成/打包仅由 CI 构建保证，运行需粉丝实测。
+- 已知债：`voicelog_win.py` 复制了一份"大脑"(幻觉过滤/能量/纠错)而非与 macOS 共享，两端须同步（见 PORT_PLAN）。
+
 ## v0.8.1 — 2026-06-19
 修复：麦克风掉线后软件「假活」——进程在、菜单栏在，却永远不再识别。
 - **病根**：采集线程 `self.q.get()` 无超时永久阻塞。USB/CoreAudio 输入设备(如 DJI Wireless Mic Rx)
