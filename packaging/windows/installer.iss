@@ -25,7 +25,7 @@ SetupIconFile=VoiceLog.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+; 仅用内置英文向导(简体中文 .isl 非 Inno Setup 自带,CI 上不可得)。App 本身仍是中文/多语言。
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
