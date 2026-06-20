@@ -126,7 +126,10 @@ def log_dir() -> Path:
 
 def append_err(msg: str) -> None:
     try:
-        with (log_dir() / "err.log").open("a", encoding="utf-8") as f:
+        p = log_dir() / "err.log"
+        if p.exists() and p.stat().st_size > (1 << 20):   # >1MB 轮转一次,防长跑无限增长
+            os.replace(p, p.with_suffix(".log.1"))
+        with p.open("a", encoding="utf-8") as f:
             f.write(f"\n[{datetime.datetime.now()}] {msg}")
     except Exception:
         pass

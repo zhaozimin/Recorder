@@ -22,6 +22,7 @@ import sys
 import time
 import zlib
 import queue
+import platform
 import tempfile
 import threading
 import datetime
@@ -35,6 +36,15 @@ import numpy as np
 import sounddevice as sd
 import yaml
 import rumps
+
+# ---------------- Apple 芯片预检：mlx 仅 Apple Silicon,Intel 上 import 即原生崩 ----------------
+# 必须在 import mlx_whisper 之前拦截,否则非技术用户在 Intel Mac 上看到的是无界面的崩溃。
+if sys.platform == "darwin" and platform.machine() != "arm64":
+    subprocess.run(["osascript", "-e",
+                    'display dialog "言壤需要 Apple 芯片（M 系列）的 Mac。\n\n当前为 Intel 机型，暂不支持。"'
+                    ' buttons {"好"} default button "好" with icon caution with title "言壤"'])
+    sys.exit(1)
+
 # 关掉会在国内卡死的 hf_xet(ECAPA 声纹模型若走 HF;whisper 模型改走 GitHub,见 model_fetch)
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 import mlx_whisper
@@ -60,6 +70,7 @@ DATA.mkdir(parents=True, exist_ok=True)
 
 ICON_PATH = RES / "assets" / "menubar.png"   # 菜单栏模板图(原 logo 抠图，只读资源)
 CONFIG_PATH = DATA / "config.yaml"           # 唯一可写配置(单一真相源)
+ONBOARD_FLAG = DATA / ".onboarded"           # 首启引导哨兵:不存在=没看过欢迎页
 
 # 首次运行(打包版)：把内置默认配置播种到用户区；此后用户的每次修改都写这一份。
 if not CONFIG_PATH.exists():
@@ -128,7 +139,10 @@ def log_dir() -> Path:
 
 def append_err(msg: str) -> None:
     try:
-        with (log_dir() / "err.log").open("a", encoding="utf-8") as f:
+        p = log_dir() / "err.log"
+        if p.exists() and p.stat().st_size > (1 << 20):   # >1MB 轮转一次,防 24h 长跑无限增长
+            os.replace(p, p.with_suffix(".log.1"))
+        with p.open("a", encoding="utf-8") as f:
             f.write(f"\n[{datetime.datetime.now()}] {msg}")
     except Exception:
         pass
@@ -578,7 +592,10 @@ class Recorder(threading.Thread):
 
         sink = write_line(text)        # 外置盘掉线会自动回退内置盘
         if sink == "lost":
+            self.state["write_lost"] = True    # 写入失败 → tick 一次性提醒(磁盘满/不可写)
             return
+        if sink == "fallback" and self.state.get("sink") != "fallback":
+            self.state["fell_back"] = True     # 首次掉到备用盘 → tick 一次性提醒
         self.state["count"] += 1
         self.state["last"] = text
         self.state["sink"] = sink
@@ -594,7 +611,9 @@ class VoiceLogApp(rumps.App):
         self._setup_icon()
         self.state = {"count": 0, "last": "", "err": "", "live": False,
                       "status": "", "sink": "vault", "dropped": 0,
-                      "enrolling": False, "enrolled": False, "last_score": None}
+                      "enrolling": False, "enrolled": False, "last_score": None,
+                      "show_welcome": not ONBOARD_FLAG.exists(),  # 首启:tick 弹一次欢迎/告知
+                      "mic_denied": False, "mic_alerted": False}  # 麦克风被拒:tick 提示去设置开
         self.rec = Recorder(self.state)
         self.state["enrolled"] = self.rec.speaker.enrolled
         self.rec.start()
@@ -624,6 +643,7 @@ class VoiceLogApp(rumps.App):
         self.spk_item = rumps.MenuItem(self._spk_title(), callback=self.toggle_speaker)
         self.kw_item = rumps.MenuItem(i18n.t("keywords"), callback=self.do_replace)
         self.note_item = rumps.MenuItem(i18n.t("open_note"), callback=self.open_note)
+        self.logs_item = rumps.MenuItem(i18n.t("open_logs"), callback=self.open_logs)  # 日志入口(出问题可发我)
         self.model_item = rumps.MenuItem(self._model_title(), callback=self.do_model)
         self.quit_item = rumps.MenuItem(i18n.t("quit"), callback=self.quit_app)
         self.version_item = rumps.MenuItem(i18n.t("cur_version", app=i18n.t("app_name"), v=VERSION))  # 无回调=不可点
@@ -650,6 +670,7 @@ class VoiceLogApp(rumps.App):
             self.vault_item,
             self.kw_item,
             self.note_item,
+            self.logs_item,
             None,  # 分隔线
             self.version_item,                       # 版本
             self.update_item,                        # 更新提示（检查中/已最新/有新版）
@@ -887,6 +908,7 @@ class VoiceLogApp(rumps.App):
         self.vault_item.title = self._vault_title()
         self.kw_item.title = i18n.t("keywords")
         self.note_item.title = i18n.t("open_note")
+        self.logs_item.title = i18n.t("open_logs")
         self.quit_item.title = i18n.t("quit")
         self.tz_menu.title = self._tz_title(self._cur_tz)
         if getattr(self, "_tz_follow", None):
@@ -904,6 +926,25 @@ class VoiceLogApp(rumps.App):
 
     @rumps.timer(2)
     def tick(self, _):
+        # 首启告知(含「正在聆听麦克风、音频不存盘」consent)——只弹一次,写哨兵
+        if self.state.pop("show_welcome", False):
+            rumps.alert(i18n.t("welcome_t"), i18n.t("welcome_b", v=str(VAULT)))
+            try:
+                ONBOARD_FLAG.write_text("1", encoding="utf-8")
+            except Exception:
+                pass
+        # 麦克风被拒/受限:醒目提示 + 一键跳隐私设置(否则只剩看不懂的 ⚠️)
+        self._check_mic()
+        if self.state.get("mic_denied") and not self.state.get("mic_alerted"):
+            self.state["mic_alerted"] = True
+            if rumps.alert(i18n.t("mic_denied_t"), i18n.t("mic_denied_b"),
+                           ok=i18n.t("mic_open_settings"), cancel=i18n.t("cancel")) == 1:
+                self.open_mic_settings()
+        # 写入失败 / 首次掉到备用盘:一次性通知(别让数据问题悄无声息)
+        if self.state.pop("write_lost", False):
+            rumps.notification(i18n.t("app_name"), "", i18n.t("write_lost_b"))
+        if self.state.pop("fell_back", False):
+            rumps.notification(i18n.t("app_name"), "", i18n.t("fell_back_b"))
         on_fallback = self.state.get("sink") == "fallback"
         tag = i18n.t("backup") if on_fallback else ""
         dropped = self.state.get("dropped", 0)
@@ -1028,11 +1069,12 @@ class VoiceLogApp(rumps.App):
         threading.Thread(target=self._run_update, args=(latest, installed), daemon=True).start()
 
     def _run_update(self, latest, installed):
-        """后台线程：下载新 dmg → apply_macos(挂载+校验+派 helper)。只改 state,UI 交给 tick。"""
+        """后台线程：下载新 dmg → apply_macos(挂载+校验+派 helper)。只改 state,UI 交给 tick。
+        VOICELOG_FAKE_DMG=file://... 可指定本地更新包用于 QA(生产不设此变量则走 GitHub)。"""
+        url = os.environ.get("VOICELOG_FAKE_DMG") or auto_update.asset_url(latest, "mac")
         dmg = Path(tempfile.gettempdir()) / f"VoiceLog-{latest}.dmg"
         ok = auto_update.download_file(
-            auto_update.asset_url(latest, "mac"), dmg,
-            lambda f: self.state.__setitem__("update_pct", round(f * 100)))
+            url, dmg, lambda f: self.state.__setitem__("update_pct", round(f * 100)))
         if not ok:
             self.state["updating"] = False
             self.state["update_result"] = i18n.t("upd_dl_fail")
@@ -1063,6 +1105,22 @@ class VoiceLogApp(rumps.App):
                     t, lambda granted: None)
         except Exception:
             append_err("request_mic: " + traceback.format_exc().splitlines()[-1])
+
+    def _check_mic(self):
+        """读麦克风授权状态置标志(0=未决定 1=受限 2=拒绝 3=已授权);被拒/受限 → tick 提示去设置开。"""
+        try:
+            import AVFoundation
+            st = AVFoundation.AVCaptureDevice.authorizationStatusForMediaType_(AVFoundation.AVMediaTypeAudio)
+            self.state["mic_denied"] = st in (1, 2)
+        except Exception:
+            pass
+
+    def open_logs(self, _):
+        subprocess.run(["open", str(log_dir())])   # 让用户够得着日志(出问题时可发我)
+
+    def open_mic_settings(self):
+        subprocess.run(["open",
+                        "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"])
 
     def open_homepage(self, _):
         import webbrowser

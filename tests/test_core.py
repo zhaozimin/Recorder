@@ -173,7 +173,9 @@ class TestI18nParity(unittest.TestCase):
                   "model_missing_t", "model_missing_b", "cur_version",
                   "upd_checking", "upd_latest", "upd_avail", "upd_downloading",
                   "upd_confirm_t", "upd_confirm_b", "upd_ok", "upd_cancel",
-                  "upd_dl_fail", "upd_fail_t", "upd_dev"):
+                  "upd_dl_fail", "upd_fail_t", "upd_dev",
+                  "open_logs", "welcome_t", "welcome_b", "mic_denied_t",
+                  "mic_denied_b", "mic_open_settings", "write_lost_b", "fell_back_b"):
             self.assertIn(k, i18n.STRINGS["zh"])
 
     def test_format_placeholders(self):

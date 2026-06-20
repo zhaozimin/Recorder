@@ -43,6 +43,7 @@ bash "$HOME/Claude/Projects/Voice recording and monitoring/voicelog/install.sh"
 ## 菜单栏图标
 🎙 正常 · ⏸ 已暂停 · 🟠 外置盘掉线(写到备用盘) · ⚠️ 出错(看 `logs/err.log`)
 
-## 夜间整理(可选,会用云端 Claude)
-让 Claude 读当天 `声音日志/YYYY-MM-DD.md`,按 `claude_prompt.md` 生成「产品日志 / 开发者日志 / 推文」。
-注意:这一步会把当天**文字**发给 Claude 云端;核心录音转写永远本地、永不上传。
+## 夜间整理(手动配方,非内置功能)
+应用本身**没有**这个按钮——这是一条你想用时自己走的手动流程:把当天 `声音日志/YYYY-MM-DD.md`
+连同 `claude_prompt.md` 贴给 Claude,生成「产品日志 / 开发者日志 / 推文」。
+完全由你手动发起;这一步会把当天**文字**发给 Claude 云端,核心录音转写永远本地、永不上传。

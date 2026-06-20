@@ -46,3 +46,7 @@ packaging/windows/Output/
 
 # ===== macOS =====
 .DS_Store
+
+# 首启引导哨兵(运行时生成)
+.onboarded
+voicelog/.onboarded
