@@ -2,6 +2,15 @@
 
 版本规则：小改 +0.1，大改 +1.0。
 
+## v0.9.13 — 2026-06-23
+闲置后首次唤醒卡顿根治（App Nap 双进程退出）。
+- **病根(已实测确诊)**：常驻产品 = SwiftUI 前端(YanRang) + Python 引擎(4G footprint，闲置实测 3.7G 被换出)，
+  两进程都未向系统声明「持续工作」→ macOS 把闲置进程 App Nap 节流 + 工作集换出。再次点击需先唤醒 +
+  把数 G 内存从磁盘换回 → 图标卡一下、开窗再卡一下才恢复。**非死锁、非负载，是闲置降级。**
+- **引擎**：`HeadlessApp.run()` 持有 `NSProcessInfo.beginActivity(UserInitiatedAllowingIdleSystemSleep)`
+  至进程退出 → 退出 App Nap；`AllowingIdleSystemSleep` = 仍允许整机正常休眠(夜间照睡、不耗电、不阻止睡眠)。
+- **前端**：YanRang `Info.plist` 加 `NSAppSleepDisabled=YES` → 菜单栏图标/主窗口即时响应。
+
 ## v0.9.12 — 2026-06-22
 声纹注册取消频闪 + 并发线程根治(经状态机对抗审查)。
 - **取消注册频闪修复**：在朗读窗点「取消」时，引擎要 1~2 拍才停，陈旧的 `enrolling=true` 会把浮层拉回 →

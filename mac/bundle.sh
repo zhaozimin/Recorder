@@ -35,11 +35,13 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key><string>YanRang</string>
   <key>CFBundleIdentifier</key><string>com.zhaozimin.voicelog.swift</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.9.5</string>
-  <key>CFBundleVersion</key><string>0.9.5</string>
+  <key>CFBundleShortVersionString</key><string>0.9.6</string>
+  <key>CFBundleVersion</key><string>0.9.6</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
+  <!-- 常驻菜单栏前端：退出 App Nap，闲置后首次点击不再卡顿(图标/窗口即时响应) -->
+  <key>NSAppSleepDisabled</key><true/>
 </dict>
 </plist>
 PLIST

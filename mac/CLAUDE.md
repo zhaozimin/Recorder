@@ -13,7 +13,7 @@ bundle.sh: `swift build` → 组装 `YanRang.app`(拷可执行 + **平铺 Resour
 
 ## 成员清单
 Package.swift: SPM 清单，声明库 `YanRangUI` + 可执行 `YanRang` 双 target 与 Resources `exclude`
-bundle.sh: 编译并组装可运行 .app；把 Resources/*.png 平铺进 Contents/Resources 供 Bundle.main 读取
+bundle.sh: 编译并组装可运行 .app；把 Resources/*.png 平铺进 Contents/Resources 供 Bundle.main 读取；Info.plist 写 `NSAppSleepDisabled=YES`(常驻菜单栏前端退出 App Nap,闲置后图标/窗口即时响应)
 Sources/YanRangApp/main.swift: 进程入口，`import YanRangUI` + `YanRangApp.main()`(代码全在库里以放行预览)
 
 ### Sources/YanRang/（= 库 YanRangUI 源码）

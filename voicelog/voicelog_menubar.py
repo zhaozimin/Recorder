@@ -63,7 +63,7 @@ from settings_ui import SettingsWindow
 # 故配置/日志/声纹必须落在用户可写区。两种形态：
 #   · 打包(.app)：资源在 bundle(_MEIPASS)，数据在 ~/Library/Application Support/VoiceLog
 #   · 源码(开发)：资源与数据都在代码旁——保持旧行为，现有 launchd 部署零改动
-VERSION = "0.9.12"
+VERSION = "0.9.13"
 
 FROZEN = getattr(sys, "frozen", False)
 RES = Path(getattr(sys, "_MEIPASS", "")) if FROZEN else Path(__file__).resolve().parent
@@ -1513,6 +1513,24 @@ class VoiceLogApp(rumps.App):
 
 
 # ============================================================================
+#  App Nap 阻断 —— 常驻引擎闲置后被 macOS 节流 + 工作集换出(实测 3.7G swapped)，
+#  是"长时间没用后首次唤醒卡几秒"的真正根源。持有一份「我在持续工作」声明即退出 App Nap。
+#  AllowingIdleSystemSleep：仅退出 App Nap，仍允许整机正常休眠 → 夜间照睡、不耗电、不阻止睡眠。
+# ============================================================================
+def _begin_no_app_nap(reason: str):
+    try:
+        from Foundation import NSProcessInfo
+        try:
+            from Foundation import NSActivityUserInitiatedAllowingIdleSystemSleep as OPT
+        except Exception:
+            OPT = 0x00EFFFFF   # = NSActivityUserInitiated & ~NSActivityIdleSystemSleepDisabled
+        return NSProcessInfo.processInfo().beginActivityWithOptions_reason_(OPT, reason)
+    except Exception:
+        append_err("app_nap disable: " + traceback.format_exc().splitlines()[-1])
+        return None
+
+
+# ============================================================================
 #  HeadlessApp —— 无菜单栏后台引擎（供 SwiftUI 全窗口 App 作 sidecar 拉起）
 #
 #  不建任何 rumps/菜单栏 UI；只跑 Recorder + 2s 循环写 state.json / 读 commands.json。
@@ -1528,6 +1546,9 @@ class HeadlessApp:
         self.state["enrolled"] = self.rec.speaker.enrolled
 
     def run(self):
+        # 持有「我在持续工作」声明直到进程退出 → 退出 App Nap：闲置不再被系统节流/换出，
+        # 根治"长时间没用后首次唤醒卡顿"。令牌挂在 self 上保证生命周期 = 进程生命周期。
+        self._activity = _begin_no_app_nap("VoiceLog 常驻语音采集，请勿 App Nap")
         self.rec.start()
         while True:
             time.sleep(2)

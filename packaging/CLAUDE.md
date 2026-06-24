@@ -6,7 +6,8 @@
 ## 成员清单
 - `macos/`: macOS 打包子模块(已可用)。PyInstaller → 签名 → 公证 → `.dmg`。
   - `VoiceLog.spec`: PyInstaller 配置。收集 mlx/torch/speechbrain/silero/sounddevice；arm64；
-    BUNDLE 设 LSUIElement(无 Dock)+麦克风用途串+bundle id `com.zhaozimin.voicelog`。
+    BUNDLE 设 LSUIElement(无 Dock)+麦克风用途串+bundle id `com.zhaozimin.voicelog`+`NSAppSleepDisabled`(退 App Nap,
+    闲置后点击即时响应——此 plist 是生产版 App 的唯一真相源,build-app.sh 仅改 CFBundleExecutable/删 LSUIElement,故必须写在这)。
   - `entitlements.plist`: 硬化运行时豁免(allow-jit / allow-unsigned-executable-memory /
     disable-library-validation / audio-input)——公证强制开硬化运行时,而 Python/torch/mlx 需这些豁免才不崩。
   - `build.sh`: 一键 构建→由内向外深签(先 dylib/so 再 .app)→校验→打 DMG。需 Developer ID 证书在钥匙串。
