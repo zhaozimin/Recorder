@@ -3,6 +3,8 @@
 
 分发打包：把源码形态的 VoiceLog 变成粉丝可下载安装的成品。macOS 已正式交付(签名+公证,Latest)；Windows 经 GitHub Actions CI 真实构建并发布(测试版,未签名)。
 
+**发布约定**：每个正式版 Release 同带双平台安装包,资产用**固定名** `VoiceLog-macOS.dmg` / `VoiceLog-Windows.exe`(不带版本号),配合 `https://github.com/zhaozimin/Recorder/releases/latest/download/<固定名>` 给官网写死、永远拉最新。铁律:两条链接要都生效,二者必须挂在**同一个非 prerelease 的 Latest release** 内(`latest` 只认一个非预发布 release)。Windows 版本号与 macOS 独立演进。
+
 ## 成员清单
 - `macos/`: macOS 打包子模块(已可用)。PyInstaller → 签名 → 公证 → `.dmg`。
   - `VoiceLog.spec`: PyInstaller 配置。收集 mlx/torch/speechbrain/silero/sounddevice；arm64；
@@ -20,7 +22,7 @@
   - `requirements-windows.txt`: Windows 依赖(faster-whisper/pystray,去掉 mlx/rumps/pyobjc)。
   - `VoiceLog-win.spec`: PyInstaller(收集 faster_whisper/ctranslate2/silero/sounddevice/speechbrain/pystray,
     排除 mlx/rumps/pyobjc;hiddenimport `pystray._win32`)。
-  - `installer.iss`: Inno Setup,把 dist\VoiceLog 打成 `VoiceLog-x.y.z-Setup.exe`(含开机自启选项)。
+  - `installer.iss`: Inno Setup,把 dist\VoiceLog 打成 `VoiceLog-Windows.exe`(**固定名**,无版本号,配合 Release `latest/download` 稳定链接;含开机自启选项)。
   - `make_ico.py` / `VoiceLog.ico`: 深色 squircle + 白 logo 的多尺寸 .ico(exe/安装器图标)。
 
 ## 关键设计：只读资源 vs 可写数据

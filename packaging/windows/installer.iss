@@ -1,6 +1,6 @@
 ; ============================================================================
 ;  VoiceLog · Windows 安装包脚本 (Inno Setup) —— 已实装,经 GitHub Actions CI 构建发布(测试版)
-;  把 PyInstaller 产出的 dist\VoiceLog\ 打成单文件安装程序 VoiceLog-x.y.z-Setup.exe(含开机自启选项)。
+;  把 PyInstaller 产出的 dist\VoiceLog\ 打成单文件安装程序 VoiceLog-Windows.exe(固定名,含开机自启选项)。
 ;  由 .github/workflows/build-windows.yml(标准)/build-windows-offline.yml(含模型离线版)调用。
 ; ============================================================================
 ; 显示名「言壤」(开始菜单/控制面板/向导可见);安装目录/输出文件名/exe 名保持 ASCII(VoiceLog)。
@@ -17,7 +17,8 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppNameAscii}
 DefaultGroupName={#MyAppName}
 OutputDir=Output
-OutputBaseFilename=VoiceLog-{#MyAppVersion}-Setup
+; 固定名(不带版本号)→ 配合 GitHub Release「latest/download/VoiceLog-Windows.exe」稳定下载链接，官网写死永远拉最新
+OutputBaseFilename=VoiceLog-Windows
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
