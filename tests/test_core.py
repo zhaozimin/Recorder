@@ -210,13 +210,13 @@ class TestDownloadModel(unittest.TestCase):
 class TestAutoUpdate(unittest.TestCase):
     def test_asset_url_mac(self):
         u = auto_update.asset_url("0.9.4", "mac")
-        self.assertEqual(u, "https://github.com/zhaozimin/Recorder/releases/download/v0.9.4/VoiceLog-0.9.4.dmg")
+        self.assertEqual(u, "https://github.com/zhaozimin/VoxTerra/releases/download/v0.9.4/VoiceLog-0.9.4.dmg")
         self.assertEqual(auto_update.asset_url("v0.9.4", "mac"), u)   # 容忍 v 前缀
 
     def test_asset_url_win(self):
         self.assertEqual(
             auto_update.asset_url("0.9.4", "win"),
-            "https://github.com/zhaozimin/Recorder/releases/download/v0.9.4-win-beta/VoiceLog-0.9.4-Setup.exe")
+            "https://github.com/zhaozimin/VoxTerra/releases/download/v0.9.4-win-beta/VoiceLog-0.9.4-Setup.exe")
 
     def test_app_bundle_root(self):
         self.assertEqual(

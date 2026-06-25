@@ -70,7 +70,7 @@ struct AboutView: View {
                             .background(Capsule().fill((engine.updateLatest == nil ? Color.ok : Color.warn).opacity(0.15)))
                             .foregroundStyle(engine.updateLatest == nil ? Color.ok : Color.warn)
                         if let v = engine.updateLatest {
-                            Button { openURL("https://github.com/zhaozimin/Recorder/releases/latest") } label: {
+                            Button { openURL("https://github.com/zhaozimin/VoxTerra/releases/latest") } label: {
                                 Label("更新到 v\(v)", systemImage: "arrow.triangle.2.circlepath")
                             }
                             .buttonStyle(.borderedProminent).tint(Color.brand).controlSize(.small).clickable()

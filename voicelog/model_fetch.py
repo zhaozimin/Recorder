@@ -21,7 +21,7 @@ import urllib.request
 from pathlib import Path
 
 # 模型托管位置:本项目 GitHub Release 的 `models` tag(我可控、国内可达、可续传/手动下)
-GITHUB_MODELS_BASE = "https://github.com/zhaozimin/Recorder/releases/download/models"
+GITHUB_MODELS_BASE = "https://github.com/zhaozimin/VoxTerra/releases/download/models"
 MAC_MODEL_URL = GITHUB_MODELS_BASE + "/whisper-mlx-turbo.zip"   # macOS / MLX
 WIN_MODEL_URL = GITHUB_MODELS_BASE + "/whisper-ct2-turbo.zip"   # Windows / faster-whisper(CT2)
 

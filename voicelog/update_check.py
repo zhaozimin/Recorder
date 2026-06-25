@@ -14,7 +14,7 @@ import re
 import json
 import urllib.request
 
-REPO = "zhaozimin/Recorder"
+REPO = "zhaozimin/VoxTerra"
 API_LATEST = f"https://api.github.com/repos/{REPO}/releases/latest"
 RELEASES_PAGE = f"https://github.com/{REPO}/releases"   # 列出全部:mac/win 用户各取所需
 
