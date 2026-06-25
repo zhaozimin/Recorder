@@ -214,15 +214,21 @@ private struct WindowConfigurator: NSViewRepresentable {
             w.center()
         }
 
-        // 幂等的窗口外观强制：隐藏系统标题、透明标题栏、底色=appBg
+        // 幂等窗口外观:仅在偏离目标值时才写——杜绝每个 display cycle 无谓重设触发 layout 死循环(持续烧 CPU)。
+        // (原版每帧无条件重设 title/底色 → 标记窗口 needsLayout → display cycle 再 layout → 再 attach→harden → 自激振荡)
         private func harden(_ w: NSWindow) {
-            w.titleVisibility = .hidden
-            w.title = ""
-            w.titlebarAppearsTransparent = true
-            w.backgroundColor = NSColor(name: nil) { ap in
-                ap.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(hex: "0a0a0a") : NSColor(hex: "fafafa")
-            }
+            if w.titleVisibility != .hidden { w.titleVisibility = .hidden }
+            if w.title != "" { w.title = "" }
+            if !w.titlebarAppearsTransparent { w.titlebarAppearsTransparent = true }
+            // 真凶根治:window.backgroundColor 绝不用 appearance-dependent 的【动态 NSColor】——
+            // 否则 NSHostingView 每个 display cycle 都重评估它 → requestUpdate 给自己续命 → 每帧重绘烧 CPU。
+            // 改用【静态色】按当前外观选一次;明暗切换时 SwiftUI 重绘 → updateNSView → 本函数重选覆盖。
+            let bg = w.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                ? Coordinator.darkBg : Coordinator.lightBg
+            if w.backgroundColor != bg { w.backgroundColor = bg }
         }
+        private static let darkBg = NSColor(hex: "0a0a0a")   // 静态明暗底色,非 appearance-dependent
+        private static let lightBg = NSColor(hex: "fafafa")
 
         deinit { if let o = observer { NotificationCenter.default.removeObserver(o) } }
 
@@ -230,9 +236,10 @@ private struct WindowConfigurator: NSViewRepresentable {
             guard let w = window else { return }
             for type in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
                 guard let b = w.standardWindowButton(type), let sv = b.superview else { continue }
-                var f = b.frame
-                f.origin.y = (sv.bounds.height - f.height) / 2   // 居中到整条标题栏高度
-                b.setFrameOrigin(f.origin)
+                let targetY = (sv.bounds.height - b.frame.height) / 2   // 居中到整条标题栏高度
+                if abs(b.frame.origin.y - targetY) > 0.5 {              // 仅在偏离时移动,免每帧 setFrameOrigin 触发 layout
+                    b.setFrameOrigin(NSPoint(x: b.frame.origin.x, y: targetY))
+                }
             }
         }
     }

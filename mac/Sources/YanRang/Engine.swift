@@ -8,8 +8,8 @@ import SwiftUI
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 
-struct LogLine: Identifiable {
-    let id = UUID()
+struct LogLine: Identifiable, Equatable {
+    let id: String      // 稳定 id(序号+时间):内容不变时 ForEach 不重建整列,免每拍刷新
     let time: String
     let text: String
 }
@@ -135,6 +135,11 @@ final class Engine: ObservableObject {
     private var pendingEnrollUntil: Date? = nil
     private var enrollCancelling = false          // 取消后:在引擎确认停下前,无视陈旧的 enrolling=true(消频闪)
 
+    // 降频记忆:笔记/模型只在相关态变化时才重算,免每秒文件 IO + 整树重绘(静止时 CPU 应归零)。
+    private var lastNoteCount = -1
+    private var lastNoteTodayKey: String? = nil
+    private var lastModelFp = ""
+
     let version = "0.9.12"
 
     // 四张模型卡（固定清单）；state 由 syncModels() 依 state.json + 目录扫描派生。
@@ -193,34 +198,34 @@ final class Engine: ObservableObject {
     func reloadState() {
         guard let data = try? Data(contentsOf: stateURL),
               let s = try? JSONDecoder().decode(StateDTO.self, from: data) else {
-            engineRunning = false                       // 文件缺失/损坏 → 引擎没在跑
+            set(\.engineRunning, false)                 // 文件缺失/损坏 → 引擎没在跑
             return
         }
-        engineRunning = Date().timeIntervalSince1970 - s.heartbeat < 6   // 3 拍内有心跳=活
+        set(\.engineRunning, Date().timeIntervalSince1970 - s.heartbeat < 6)   // 3 拍内有心跳=活
         // 暂停守护:刚点暂停/继续,等 s.muted 对上才放行(消除按一下闪回旧态)
         if let want = pendingMuted {
-            if s.muted == want { pendingMuted = nil; muted = s.muted }
+            if s.muted == want { pendingMuted = nil; set(\.muted, s.muted) }
         } else {
-            muted = s.muted
+            set(\.muted, s.muted)
         }
-        live = s.live
-        count = s.count
-        dropped = s.dropped
-        modelReady = s.model.ready
+        set(\.live, s.live)
+        set(\.count, s.count)
+        set(\.dropped, s.dropped)
+        set(\.modelReady, s.model.ready)
         // 切换守护:刚点"使用"的档名,等引擎写回相同 name 才放行,否则守住乐观值(消除"使用中"横跳)
         if let want = pendingModelName {
-            if s.model.name == want { pendingModelName = nil; modelName = s.model.name }
+            if s.model.name == want { pendingModelName = nil; set(\.modelName, s.model.name) }
         } else {
-            modelName = s.model.name
+            set(\.modelName, s.model.name)
         }
-        enrolled = s.speaker.enrolled
+        set(\.enrolled, s.speaker.enrolled)
         // 声纹门守护:刚切换,等 s.speaker.gate_on 对上才放行
         if let want = pendingSpeakerOn {
-            if s.speaker.gate_on == want { pendingSpeakerOn = nil; speakerOn = s.speaker.gate_on }
+            if s.speaker.gate_on == want { pendingSpeakerOn = nil; set(\.speakerOn, s.speaker.gate_on) }
         } else {
-            speakerOn = s.speaker.gate_on
+            set(\.speakerOn, s.speaker.gate_on)
         }
-        lastScore = s.speaker.last_score
+        set(\.lastScore, s.speaker.last_score)
         // 注册守护(双向消闪):
         //  · 开始:点"注册"乐观置 true,在宽限期内保持(用截止时刻而非死等 true——注册可能瞬间失败,死等会永驻);
         //  · 取消:点"取消"乐观置 false,但引擎要 1~2 拍才停,陈旧的 enrolling=true 会把浮层拉回 → 频闪。
@@ -229,27 +234,27 @@ final class Engine: ObservableObject {
         if engineEnrolling { pendingEnrollUntil = nil }
         if !engineEnrolling { enrollCancelling = false }     // 引擎已停 → 撤销取消守护,交回轮询
         let optimisticEnroll = pendingEnrollUntil.map { Date() < $0 } ?? false
-        enrolling = (engineEnrolling && !enrollCancelling) || optimisticEnroll
+        set(\.enrolling, (engineEnrolling && !enrollCancelling) || optimisticEnroll)
         // 进度只在引擎真正在录该轮时取真值;乐观开窗的起步阶段/已结束 → 归零,
         // 免得重注册开头显示上一轮残留的 enroll_voiced(=20)→"0秒/采集完成"误闪。
         if engineEnrolling {
-            enrollProgress = s.speaker.enroll_progress ?? 0
-            enrollVoiced = s.speaker.enroll_voiced ?? 0
+            set(\.enrollProgress, s.speaker.enroll_progress ?? 0)
+            set(\.enrollVoiced, s.speaker.enroll_voiced ?? 0)
         } else {
-            enrollProgress = 0
-            enrollVoiced = 0
+            set(\.enrollProgress, 0)
+            set(\.enrollVoiced, 0)
         }
-        updateLatest = s.update?.latest
-        if let v = s.paths?.vault { vault = v }
+        set(\.updateLatest, s.update?.latest)
+        if let v = s.paths?.vault { set(\.vault, v) }
         if let d = s.paths?.data_dir { dataDir = d }
         engineTodayKey = s.today_key ?? ""
         if let g = s.settings {                       // 设置回显(LangTab 直接绑这些;Params/Keywords onAppear 取初值)
-            echo("ui_language", g.ui_language ?? "") { cfgUILang = $0 }
-            echo("primary_language", g.primary_language ?? "") { cfgPrimaryLang = $0 }
-            echo("secondary_language", g.secondary_language ?? "") { cfgSecondaryLang = $0 }
-            echo("timezone", g.timezone ?? "") { cfgTimezone = $0 }
-            echo("keywords", g.keywords ?? "") { cfgKeywords = $0 }
-            cfgParams = [
+            echo("ui_language", g.ui_language ?? "", \.cfgUILang)
+            echo("primary_language", g.primary_language ?? "", \.cfgPrimaryLang)
+            echo("secondary_language", g.secondary_language ?? "", \.cfgSecondaryLang)
+            echo("timezone", g.timezone ?? "", \.cfgTimezone)
+            echo("keywords", g.keywords ?? "", \.cfgKeywords)
+            set(\.cfgParams, [
                 "vad_threshold": g.vad_threshold ?? 0.6,
                 "min_speech_ms": g.min_speech_ms ?? 300,
                 "min_silence_ms": g.min_silence_ms ?? 700,
@@ -257,25 +262,38 @@ final class Engine: ObservableObject {
                 "speaker_threshold": g.speaker_threshold ?? 0.35,
                 "speaker_min_verify_sec": g.speaker_min_verify_sec ?? 1.2,
                 "max_utterance_sec": g.max_utterance_sec ?? 30,
-            ]
+            ])
         }
-        syncModels(s)
+        // 模型卡:仅在引擎模型态有变(下载/就绪/切换/进度/pending)时才重算——免静止时每秒扫模型目录。
+        let modelFp = "\(s.model.ready)|\(s.model.name)|\(s.model.downloading ?? false)|\(s.model.pct ?? 0)|\(s.model.dl_id ?? "")|\(s.model.result_id ?? "")|\(pendingDownloads.count)"
+        if modelFp != lastModelFp { lastModelFp = modelFp; syncModels(s) }
         // 失败反馈:下载中断会留 .part,点「下载」即从断点续——明确告诉用户,别以为白下了
         switch s.model.result {
-        case "fail":      modelNote = "上次下载中断,已保留进度。点对应档位的「下载」可从断点继续。"
-        case "cancelled": modelNote = "已取消下载,进度已保留。点「下载」可从断点继续。"
-        default:          modelNote = nil
+        case "fail":      set(\.modelNote, "上次下载中断,已保留进度。点对应档位的「下载」可从断点继续。")
+        case "cancelled": set(\.modelNote, "已取消下载,进度已保留。点「下载」可从断点继续。")
+        default:          set(\.modelNote, nil)
         }
-        refreshNotes(todayFile: s.today_file)
+        // 笔记:仅在有新记录(count 变)或跨天(today_key 变)时重读 → 免静止时每秒文件 IO + today 重绘。
+        let todayKeyChanged = (s.today_key != lastNoteTodayKey)
+        if s.count != lastNoteCount || todayKeyChanged {
+            lastNoteCount = s.count
+            lastNoteTodayKey = s.today_key
+            refreshNotes(todayFile: s.today_file, scanHistory: todayKeyChanged)
+        }
+    }
+
+    /// 仅在新值与当前不同才写入 @Published——避免无谓 objectWillChange 触发整树重算(性能命脉)。
+    private func set<T: Equatable>(_ keyPath: ReferenceWritableKeyPath<Engine, T>, _ value: T) {
+        if self[keyPath: keyPath] != value { self[keyPath: keyPath] = value }
     }
 
     /// 设置回显对账:pending 中的字段须等引擎回写相同值才放行,否则守住乐观值——消除切换闪烁。
-    private func echo(_ key: String, _ incoming: String, _ assign: (String) -> Void) {
+    private func echo(_ key: String, _ incoming: String, _ keyPath: ReferenceWritableKeyPath<Engine, String>) {
         if let want = pendingSettings[key] {
             guard incoming == want else { return }      // 引擎尚未确认:守住本地乐观值,跳过覆盖
             pendingSettings.removeValue(forKey: key)     // 已确认:放行,恢复轮询接管
         }
-        assign(incoming)
+        set(keyPath, incoming)
     }
 
     // ========================================================================
@@ -302,17 +320,19 @@ final class Engine: ObservableObject {
             if engineDownloading || onDisk || s.model.result_id == m.id {
                 pendingDownloads.remove(m.id)
             }
+            let newState: ModelState
             if engineDownloading {
-                models[i].state = .downloading(Double(s.model.pct ?? 0) / 100)   // 正在下载的那张卡(真进度)
+                newState = .downloading(Double(s.model.pct ?? 0) / 100)          // 正在下载的那张卡(真进度)
             } else if pendingDownloads.contains(m.id) {
                 // 守护:引擎还没接手——保持本卡现有进度,绝不用全局 s.model.pct(那是上一个下载的残值,会闪 100%)
-                if case .downloading(let p) = m.state { models[i].state = .downloading(p) }
-                else { models[i].state = .downloading(0) }
+                if case .downloading(let p) = m.state { newState = .downloading(p) }
+                else { newState = .downloading(0) }
             } else if onDisk {
-                models[i].state = .downloaded                                    // 已下载(含使用中)
+                newState = .downloaded                                           // 已下载(含使用中)
             } else {
-                models[i].state = .notDownloaded
+                newState = .notDownloaded
             }
+            if models[i].state != newState { models[i].state = newState }        // 仅变化才写,免无谓 publish
         }
     }
 
@@ -402,20 +422,22 @@ final class Engine: ObservableObject {
             guard let m = Engine.lineRE.firstMatch(in: s, range: r),
                   let tr = Range(m.range(at: 1), in: s), let xr = Range(m.range(at: 2), in: s)
             else { continue }
-            out.append(LogLine(time: String(s[tr]), text: String(s[xr])))
+            out.append(LogLine(id: "\(out.count)-\(s[tr])", time: String(s[tr]), text: String(s[xr])))
         }
         return out
     }
 
-    private func refreshNotes(todayFile: String?) {
+    private func refreshNotes(todayFile: String?, scanHistory: Bool) {
+        let newToday: [LogLine]
         if let f = todayFile {
-            today = parseMd(URL(fileURLWithPath: f))
+            newToday = parseMd(URL(fileURLWithPath: f))
         } else if let v = vaultURL {
-            today = parseMd(v.appendingPathComponent(ymdKey(Date()) + ".md"))
+            newToday = parseMd(v.appendingPathComponent(ymdKey(Date()) + ".md"))
         } else {
-            today = []
+            newToday = []
         }
-        historyDays = scanDays()
+        set(\.today, newToday)
+        if scanHistory { set(\.historyDays, scanDays()) }   // 历史日期集合只在跨天才变,无谓不扫目录
     }
 
     private func scanDays() -> Set<String> {

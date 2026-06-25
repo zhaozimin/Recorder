@@ -2,6 +2,13 @@
 
 版本规则：小改 +0.1，大改 +1.0。
 
+## v0.9.16 — 2026-06-25
+根治界面卡顿（前台 CPU 16%→0%、内存 144M→32M）。三层叠加病灶，逐层挖到根：
+- **病灶一·每秒全树重绘**：Engine.reloadState 每拍无条件给所有 @Published 赋值，即使值没变也触发 objectWillChange → 整树每秒重算布局，外加每秒读 md 文件 / 扫模型目录。修法：diff 赋值（值不变不写）、笔记与模型卡只在相关态变化时才重读、LogLine 用稳定 id。
+- **病灶二·窗口属性每帧重设**：WindowConfigurator.harden / 红绿灯居中每个 display cycle 无条件重设窗口 title/底色/位置 → 标记 needsLayout；且 window 背景用动态 NSColor，NSHostingView 每帧重评估它 → requestUpdate 续命。修法：harden 与居中改为幂等（仅偏离时才写）+ 窗口底色改用静态色（不再 appearance-dependent）。
+- **病灶三·呼吸灯驱动 render 循环（CPU 主凶）**：首页「聆听」呼吸灯用 SwiftUI 的 `repeatForever` 动画，而 SwiftUI 持续动画会驱动整个 NSHostingView 每帧（60fps）重算整树 DisplayList，持续烧 ~15% CPU。修法：把脉冲扩散下沉到 Core Animation（CALayer + CABasicAnimation），在 GPU 层独立循环，SwiftUI render 循环彻底静默。
+- **同构与教训**：三病灶病根一致——某种「持续的、无谓的刷新」。幂等不是优化是纪律；持续动画要交给 Core Animation 而非 SwiftUI 主循环。另：debug build 因优化/时序碰巧规避，性能必须在 release + 真实前台 + 动画态下验证，否则被假象误导。
+
 ## v0.9.15 — 2026-06-25
 新增「开机自启」+「静默启动」（登录后悄悄在菜单栏后台记录）。
 - **开机自启**：设置 →「启动」页开关，走系统登录项 SMAppService.mainApp（macOS 自持久化）；登录后自动拉起言壤。

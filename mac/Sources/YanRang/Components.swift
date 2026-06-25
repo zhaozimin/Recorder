@@ -26,30 +26,93 @@ extension View {
     }
 }
 
-// 呼吸灯：聆听=绿色脉冲 / 暂停=灰 / 准备=黄
+// ============================================================================
+//  呼吸灯：聆听=绿色脉冲 / 暂停=灰 / 准备=黄
+//  脉冲扩散下沉到 Core Animation(CALayer),在 GPU/CA 层独立循环——
+//  关键:SwiftUI 的 repeatForever 动画会驱动整个 NSHostingView 每帧重算整树
+//  DisplayList(display-link 60fps),实测持续烧 ~15% CPU。改用 CABasicAnimation 后,
+//  动画交给 Core Animation,SwiftUI render 循环彻底静默(静止 CPU 归零)。
+// ============================================================================
 struct BreathingDot: View {
     let active: Bool
     let muted: Bool
-    @State private var pulse = false
-    private var color: Color { active ? .ok : (muted ? Color.textTertiary : .warn) }
-
     var body: some View {
-        ZStack {
-            if active {
-                Circle().fill(Color.ok).frame(width: 14, height: 14)
-                    .scaleEffect(pulse ? 1.9 : 1).opacity(pulse ? 0 : 0.55)
-            }
-            Circle().fill(color).frame(width: 14, height: 14)
+        PulseDotRep(active: active, muted: muted).frame(width: 14, height: 14)
+    }
+}
+
+private struct PulseDotRep: NSViewRepresentable {
+    let active: Bool
+    let muted: Bool
+    func makeNSView(context: Context) -> PulseDotView { PulseDotView() }
+    func updateNSView(_ v: PulseDotView, context: Context) { v.apply(active: active, muted: muted) }
+}
+
+/// 呼吸灯的 Core Animation 宿主:底圆(实心) + 脉冲圆(CABasicAnimation scale/opacity 无限循环)。
+final class PulseDotView: NSView {
+    private let pulse = CALayer()                       // 扩散脉冲(在下)
+    private let base  = CALayer()                       // 实心圆点(在上,盖住脉冲起点)
+    private var animating = false
+    private var curActive = false
+    private var curMuted = false
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer = CALayer()
+        let d: CGFloat = 14
+        for l in [pulse, base] {                        // 先加 pulse(底层) 后加 base(上层)
+            l.frame = CGRect(x: 0, y: 0, width: d, height: d)
+            l.cornerRadius = d / 2
+            layer?.addSublayer(l)
         }
-        .frame(width: 14, height: 14)
-        .onAppear { restart() }
-        .onChange(of: active) { _, _ in restart() }   // 暂停/继续来回切换后，动画也能重启
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) 未实现") }
+
+    override var intrinsicContentSize: NSSize { NSSize(width: 14, height: 14) }
+
+    // CALayer 颜色非 appearance-dynamic,明暗切换需手动重上色。
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyColors()
     }
 
-    private func restart() {
-        pulse = false                                  // 先复位到起点(否则停留在透明放大态)
-        guard active else { return }
-        withAnimation(.easeOut(duration: 1.5).repeatForever(autoreverses: false)) { pulse = true }
+    func apply(active: Bool, muted: Bool) {
+        curActive = active; curMuted = muted
+        applyColors()
+        if active && !animating { startPulse() }
+        else if !active && animating { stopPulse() }
+    }
+
+    private var isDark: Bool { effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua }
+
+    private func applyColors() {
+        let ok = NSColor(hex: isDark ? "22c55e" : "16a34a").cgColor
+        base.backgroundColor = curActive ? ok
+            : (curMuted ? NSColor(hex: "737373").cgColor
+                        : NSColor(hex: isDark ? "f59e0b" : "d97706").cgColor)
+        pulse.backgroundColor = ok
+        pulse.isHidden = !curActive
+    }
+
+    private func startPulse() {
+        animating = true
+        let scale = CABasicAnimation(keyPath: "transform.scale")
+        scale.fromValue = 1.0; scale.toValue = 1.9
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 0.55; fade.toValue = 0.0
+        let group = CAAnimationGroup()
+        group.animations = [scale, fade]
+        group.duration = 1.5
+        group.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        group.repeatCount = .infinity
+        group.isRemovedOnCompletion = false
+        pulse.add(group, forKey: "breathe")
+    }
+
+    private func stopPulse() {
+        animating = false
+        pulse.removeAnimation(forKey: "breathe")
     }
 }
 
