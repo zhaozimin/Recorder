@@ -23,6 +23,8 @@ if [ -n "$DYLIB" ]; then
 fi
 # 品牌 PNG 平铺进 Contents/Resources —— 运行期唯一真相源(Bundle.main)。不走 SPM 资源包/Bundle.module(分发即崩)。
 cp Sources/YanRang/Resources/*.png "$APP/Contents/Resources/"
+# Dock/Finder 应用图标:嵌入打包期生成的 .icns(CFBundleIconFile=AppIcon)
+cp ../packaging/macos/VoiceLog.icns "$APP/Contents/Resources/AppIcon.icns"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -31,11 +33,12 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <dict>
   <key>CFBundleName</key><string>言壤</string>
   <key>CFBundleDisplayName</key><string>言壤</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleExecutable</key><string>YanRang</string>
   <key>CFBundleIdentifier</key><string>com.zhaozimin.voicelog.swift</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.0</string>
-  <key>CFBundleVersion</key><string>1.0</string>
+  <key>CFBundleShortVersionString</key><string>1.1</string>
+  <key>CFBundleVersion</key><string>1.1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>

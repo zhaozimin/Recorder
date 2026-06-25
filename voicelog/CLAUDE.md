@@ -35,7 +35,7 @@
 - `requirements.txt`: 依赖清单(mlx-whisper / silero-vad / sounddevice / speechbrain / rumps …)。
 - `install.sh`: venv 与依赖安装脚本。
 - `README.md` / `claude_prompt.md`: 使用说明 / 给 Agent 的部署提示。
-- `assets/`: 图标资源。`menubar.png`(品牌 logo 抠图→黑+alpha 模板图，菜单栏用) / `icon.png`(白色透明大图，App/Dock 用) / `logo_src.png`(原图留存，便于重生成)。
+- `assets/`: 图标资源。`logo_src.png`(3D 写实彩色母版:麦克风+无限符号+绛红线,自带深色背景,**App/Dock/Finder/README 图标真相源**,make_icon/make_ico 由它裁满铺圆角) / `menubar.png`(品牌 logo 抠图→黑+alpha 模板图,**菜单栏状态栏用,保持原样**,isTemplate 自动反色) / `icon.png`(白色透明 logo,现仅供 Windows `_tray_image` 合成到深色圆角底;App/Dock 图标已改由 logo_src.png 出)。
 - `logs/`: 运行日志(out.log / err.log)，非源码。
 
 ## 数据流(单向，如河流)

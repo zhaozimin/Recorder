@@ -1,63 +1,60 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-[INPUT]: 读 voicelog/assets/icon.png(白色透明 logo)
-[OUTPUT]: 生成 packaging/macos/VoiceLog_iconmaster.png(1024 方形 App 图标:深色 squircle + 白 logo)
-[POS]: macOS 打包资源生成器;仅打包期运行,非运行依赖。配 sips/iconutil 产出 .icns。
+[INPUT]: 读 voicelog/assets/logo_src.png(3D 写实彩色母版,自带深色背景)
+[OUTPUT]: VoiceLog_iconmaster.png(1024 满铺圆角 squircle) + VoiceLog.iconset/* + VoiceLog.icns
+[POS]: macOS 打包图标生成器;仅打包期运行,非运行依赖。一条命令重生 .icns。
 [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 
-设计:照搬原 logo 品牌——近黑炭灰背景 + 居中白色话筒/无限符号。macOS 圆角方(squircle)。
-为消除锯齿,全程在 2x 超采样画布上绘制,最后一次性降采样。
+设计:新品牌图本身即成品(麦克风+无限符号 3D 渲染,深色影棚背景到边),
+故管线由「白 logo 合成深色底」反转为「成品母版裁满铺圆角」。
+Apple squircle 圆角半径 ≈ 0.2237 * 边长;在 2x 母版上裁切后降采样,圆角抗锯齿自然。
 """
+import subprocess
 from pathlib import Path
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "voicelog" / "assets" / "icon.png"
-OUT = Path(__file__).resolve().parent / "VoiceLog_iconmaster.png"
+SRC = ROOT / "voicelog" / "assets" / "logo_src.png"
+OUTDIR = Path(__file__).resolve().parent
+MASTER = OUTDIR / "VoiceLog_iconmaster.png"
+ICONSET = OUTDIR / "VoiceLog.iconset"
+ICNS = OUTDIR / "VoiceLog.icns"
 
-S = 1024          # 目标边长
-SS = 2            # 超采样倍率
-N = S * SS
-MARGIN = 98 * SS  # Apple 图标栅格:形状四周留白
-RADIUS = 186 * SS # 圆角半径(≈ 0.225 * 形状边长)
-TOP = (0x28, 0x28, 0x2d)     # 顶部炭灰
-BOT = (0x15, 0x15, 0x17)     # 底部近黑
-LOGO_W_RATIO = 0.64          # 白 logo 占形状宽度的比例
+RADIUS_RATIO = 0.2237                     # Apple 连续曲率圆角比例
+SPECS = [(16, 1), (16, 2), (32, 1), (32, 2), (128, 1), (128, 2),
+         (256, 1), (256, 2), (512, 1), (512, 2)]
 
 
-def vertical_gradient(w: int, h: int, top, bot) -> Image.Image:
-    """竖直渐变填充,模拟原 logo 背景的微妙明暗。"""
-    grad = Image.new("RGB", (1, h))
-    for y in range(h):
-        t = y / max(1, h - 1)
-        grad.putpixel((0, y), tuple(round(top[i] + (bot[i] - top[i]) * t) for i in range(3)))
-    return grad.resize((w, h))
+def squircle(img: Image.Image) -> Image.Image:
+    """满铺圆角:整图裁成 squircle,角外透明。"""
+    n = img.width
+    mask = Image.new("L", (n, n), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        [0, 0, n - 1, n - 1], radius=round(RADIUS_RATIO * n), fill=255)
+    out = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    out.paste(img, (0, 0), mask)
+    return out
 
 
 def main() -> None:
-    box = N - 2 * MARGIN
+    src = Image.open(SRC).convert("RGBA")
+    if src.width != src.height:
+        s = min(src.width, src.height)                       # 兜底:非方图居中裁方
+        src = src.crop(((src.width - s) // 2, (src.height - s) // 2,
+                        (src.width + s) // 2, (src.height + s) // 2))
+    sq = squircle(src)                                       # 母版分辨率下的 squircle
 
-    # 1) squircle 蒙版(超采样下圆角抗锯齿自然)
-    mask = Image.new("L", (N, N), 0)
-    ImageDraw.Draw(mask).rounded_rectangle(
-        [MARGIN, MARGIN, N - MARGIN, N - MARGIN], radius=RADIUS, fill=255)
+    sq.resize((1024, 1024), Image.LANCZOS).save(MASTER)
+    print("wrote", MASTER)
 
-    # 2) 渐变底 + 蒙版裁成圆角方
-    canvas = Image.new("RGBA", (N, N), (0, 0, 0, 0))
-    grad = vertical_gradient(N, N, TOP, BOT).convert("RGBA")
-    canvas.paste(grad, (0, 0), mask)
-
-    # 3) 白色 logo 居中(按宽缩放,保持原始宽高比)
-    logo = Image.open(SRC).convert("RGBA")
-    lw = int(box * LOGO_W_RATIO)
-    lh = round(lw * logo.height / logo.width)
-    logo = logo.resize((lw, lh), Image.LANCZOS)
-    canvas.alpha_composite(logo, ((N - lw) // 2, (N - lh) // 2))
-
-    # 4) 降采样到目标尺寸,落盘
-    canvas.resize((S, S), Image.LANCZOS).save(OUT)
-    print("wrote", OUT)
+    ICONSET.mkdir(exist_ok=True)
+    for base, scale in SPECS:
+        px = base * scale
+        name = f"icon_{base}x{base}{'@2x' if scale == 2 else ''}.png"
+        sq.resize((px, px), Image.LANCZOS).save(ICONSET / name)
+    subprocess.run(["iconutil", "-c", "icns", str(ICONSET), "-o", str(ICNS)], check=True)
+    print("wrote", ICNS)
 
 
 if __name__ == "__main__":

@@ -79,8 +79,8 @@ app = BUNDLE(
         # 显示名用中文品牌「言壤」(访达/麦克风权限列表所见);磁盘 .app 名与 bundle id 仍 ASCII。
         "CFBundleName": "言壤",
         "CFBundleDisplayName": "言壤",
-        "CFBundleShortVersionString": "1.0",
-        "CFBundleVersion": "1.0",
+        "CFBundleShortVersionString": "1.1",
+        "CFBundleVersion": "1.1",
         "LSUIElement": True,                 # 菜单栏常驻,无 Dock 图标
         "NSAppSleepDisabled": True,          # 退出 App Nap:常驻前端闲置后点击即时响应(引擎侧另由 beginActivity 保活)
         "LSMinimumSystemVersion": "13.0",

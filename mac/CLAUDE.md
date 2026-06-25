@@ -13,7 +13,7 @@ bundle.sh: `swift build` → 组装 `YanRang.app`(拷可执行 + **平铺 Resour
 
 ## 成员清单
 Package.swift: SPM 清单，声明库 `YanRangUI` + 可执行 `YanRang` 双 target 与 Resources `exclude`
-bundle.sh: 编译并组装可运行 .app；把 Resources/*.png 平铺进 Contents/Resources 供 Bundle.main 读取；Info.plist 写 `NSAppSleepDisabled=YES`(常驻菜单栏前端退出 App Nap,闲置后图标/窗口即时响应)
+bundle.sh: 编译并组装可运行 .app；把 Resources/*.png 平铺进 Contents/Resources 供 Bundle.main 读取；嵌入 `../packaging/macos/VoiceLog.icns` 作 Dock/Finder 应用图标(CFBundleIconFile=AppIcon)；Info.plist 写 `NSAppSleepDisabled=YES`(常驻菜单栏前端退出 App Nap,闲置后图标/窗口即时响应)
 Sources/YanRangApp/main.swift: 进程入口，`import YanRangUI` + `YanRangApp.main()`(代码全在库里以放行预览)
 
 ### Sources/YanRang/（= 库 YanRangUI 源码）
@@ -29,7 +29,7 @@ HistoryView.swift: 历史(搜索置顶 + 左大日历右内容卡 + 全历史搜
 SettingsView.swift: 设置(页内胶囊标签：语言时区/模型下载/保存位置/关键词/参数/配置文件/启动)；启动页=开机自启+静默启动两开关(走 Startup.swift,纯前端偏好,@AppStorage/SMAppService)；语言时区页=固定宽(192)自定义 Menu 下拉(复刻 Tauri w-48 select)；模型下载页=模型卡+下载/取消(✕,留进度续传)/使用(切换)/删除按钮+进度+中断反馈条,驱动 Engine.models
 AboutView.swift: 关于(真 App logo + 介绍 + 作者链接，真品牌图标)
 TrayView.swift: 菜单栏弹窗——Quiet Dark 卡片化(系统 MenuBarExtra(.window) 即玻璃面板,内铺前景 5% 叠层圆角卡,禁双层面板)。摘要卡(黑底 App logo Asset.logoDark+言壤+版本号同行+录音中/已暂停+自绘绿轨道开关 QuietSwitch)/状态卡(本地模型·声纹 绿点在线/橙点缺失)/打开主窗口卡(经 Startup.enterForeground 回前台形态)/链接卡(作者三链接转中性:globe+Obsidian/GitHub 矢量,单绿铁律)/退出红卡。内含 QuietSwitch/OpenMainCard/QuitCard/LinkRow 私有组件 + quietCard/actionCardBackground 卡片底座
-Resources/: AppLogo.png(关于页彩色红底 logo) + AppLogoDark.png(托盘摘要卡黑底 logo,裁自 VoiceLog_iconmaster.png 满铺) + TrayIcon.png(菜单栏单色模板图标)
+Resources/: AppLogo.png(关于页彩色 logo,3D 麦克风+无限符号 深色 squircle) + AppLogoDark.png(托盘摘要卡 logo,3D 母版裁满铺,深角融入暗卡) + TrayIcon.png(菜单栏单色模板图标,166:120,isTemplate,**保持原样未改**)
 
 ## 设计要点（为何这样）
 - 隐藏系统标题栏(.hiddenTitleBar) + 自绘顶栏：上下同底色、无分割线、红绿灯悬浮其上 → 真正的"统一工具栏"

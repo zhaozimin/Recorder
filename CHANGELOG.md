@@ -2,6 +2,15 @@
 
 版本规则：小改 +0.1，大改 +1.0。
 
+## v1.1 — 2026-06-25
+App 图标换装 3D 写实风：麦克风与无限符号(∞)熔接成单体——斜置麦克风做左环、声波/五线谱做右环、一条绛红线点睛，呼应「无限录音·无限转写」。深色满铺 squircle，与 MicTether 同一视觉语言。
+- **图标管线反转**：真相源由「白透明 logo」改为「成品 3D 彩色母版」(`voicelog/assets/logo_src.png`)；`make_icon.py`/`make_ico.py` 改为「母版裁满铺圆角」一气产 `.icns`/`.ico`/iconmaster；README hero、关于页彩色 logo、托盘摘要卡黑底 logo 同步换新。
+- **去 Gemini 水印**：右下角 ✦ 用二次曲面重建背景抹除，无痕。
+- **状态栏图标保持原样**：菜单栏单色模板(mic+∞ 线稿)不动，仅彩色 App 图标换装。
+- **bundle.sh 补嵌 .icns**：dev 构建此前无应用图标，现嵌入 `VoiceLog.icns`(CFBundleIconFile)，Dock/Finder 即显。
+- **仓库引用归位**：模型下载/更新检查/关于页/测试里的 `zhaozimin/Recorder` → `zhaozimin/VoxTerra`，对齐实际仓库名(否则线上包带失效旧 URL)。
+- 机器名/bundle id(`com.zhaozimin.voicelog`)/数据目录不动；Windows 版本号独立演进，本次仅 macOS 图标更新，Windows 包沿用上版。
+
 ## v1.0 — 2026-06-25
 菜单栏托盘弹窗以「Quiet Dark」设计语言重做，功能成熟，定为稳定版 1.0。
 - **托盘重设计**：系统 MenuBarExtra(.window) 即玻璃面板，内铺前景色低透明叠层圆角卡（填充 5%/描边 6%，禁固定灰阶）；三级文字、单一绿强调（仅「录音中/已启用/在线」=绿点·绿轨道开关）。分区为摘要卡 / 状态卡（本地模型·声纹 绿点在线·橙点缺失）/ 打开主窗口卡 / 链接卡 / 退出红卡。自绘 QuietSwitch 替代 macOS 上不可靠的原生 Toggle。
